@@ -116,10 +116,18 @@
               echo "arf: $(arf --version)"
               echo "jarl: $(jarl --version)"
 
-              # Expose native library directories at runtime so rv-installed R
-              # packages that link against Nix-provided libs (openssl, curl,
-              # arrow-cpp, etc.) can find them after installation.
-              export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath systemDependencies}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+              # Force R packages to compile from source when using this Nix flake,
+              # so they link against Nix-provided native libraries. PPM binaries are
+              # built against host system libraries and cannot be reliably rewired
+              # to Nix libraries due to ABI version mismatches (ICU, arrow-cpp, etc.).
+              # Non-Nix users are unaffected because this env var is only set here.
+              export R_COMPILE_AND_INSTALL_PACKAGES=always
+
+              # Embed Nix native library paths into source-built R packages via the
+              # Nix gcc wrapper. This avoids needing LD_LIBRARY_PATH, which would
+              # force system binaries (git, timedatectl, etc.) to load Nix glibc and
+              # break on conventional Linux/macOS distributions.
+              export NIX_LDFLAGS="${pkgs.lib.concatMapStringsSep " " (pkg: "-rpath ${pkgs.lib.getLib pkg}/lib") systemDependencies}"
 
               # V8's configure script downloads a static libv8 build when this
               # variable is set, avoiding a dependency on a system libv8 package.
