@@ -80,11 +80,17 @@
             R
           ];
 
-          devShellTools = [
+          rTools = [
             tools.rv
             tools.arf
             tools.jarl
             tools.air
+          ];
+
+          devShellTools = [
+            pkgs.git
+            pkgs.gh
+            pkgs.google-cloud-sdk
           ];
 
           rWrapper = pkgs.rWrapper.override {
@@ -95,9 +101,9 @@
           devShells.default = pkgs.mkShell {
             name = "opi-base-shell";
 
-            buildInputs = rPackages ++ systemDependencies ++ devShellTools ++ [ rWrapper ];
+            buildInputs = rPackages ++ systemDependencies ++ rTools ++ devShellTools ++ [ rWrapper ];
 
-            packages = [ rWrapper tools.rv tools.arf tools.jarl tools.air ];
+            packages = [ rWrapper ] ++ rTools ++ devShellTools;
 
             R_HOME = "${pkgs.R}/lib/R";
 
