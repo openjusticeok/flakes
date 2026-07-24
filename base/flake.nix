@@ -72,6 +72,7 @@
             libpng
             libtiff
             libjpeg
+            libwebp
 
             # Arrow C++ libs (ojoutils depends on arrow)
             arrow-cpp
