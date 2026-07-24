@@ -1,0 +1,53 @@
+{
+  "rv": {
+    "owner": "A2-ai",
+    "repo": "rv",
+    "version": "0.22.2",
+    "tag_prefix": "v",
+    "hash": "sha256-v9VJ54EZ/UcbELn5nHoyppOrHWhWOagJqoBpVWkAeTg=",
+    "cargo_hash": "sha256-rphrVNnhEKMDUABuAtcUErNduu6zuyY7uDLgpMFCMcU=",
+    "build_features": [
+      "cli"
+    ],
+    "native_build_inputs": [
+      "pkg-config"
+    ],
+    "build_inputs": [
+      "openssl"
+    ],
+    "do_check": false
+  },
+  "arf": {
+    "owner": "eitsupi",
+    "repo": "arf",
+    "version": "0.4.3",
+    "tag_prefix": "v",
+    "hash": "sha256-CceBGYa24VsJBG7Aza8EcDJe0DoI4+mCXQiZ+HLF4A4=",
+    "cargo_hash": "sha256-DHMEmBYrONfxEIOmc9lTN9cEukfJrRg62Lzj3aPnQak=",
+    "native_build_inputs": [
+      "pkg-config"
+    ],
+    "build_inputs": [
+      "openssl"
+    ],
+    "do_check": false
+  },
+  "jarl": {
+    "owner": "etiennebacher",
+    "repo": "jarl",
+    "version": "0.5.0",
+    "tag_prefix": "",
+    "hash": "sha256-MFP1xMNnJ9mfHuUu6hqE9B7nRgI2HfXBpblo3sFnAwo=",
+    "cargo_hash": "sha256-Rhv9Wku/bRl28nrXYof+6VAgl2K4ysILRQa1v19r0pU=",
+    "do_check": false
+  },
+  "air": {
+    "owner": "posit-dev",
+    "repo": "air",
+    "version": "0.10.0",
+    "tag_prefix": "",
+    "hash": "sha256-u0icSo6aW6tLgY57RPAoVte5Awn16FLIvZEeeYNr5fk=",
+    "cargo_hash": "sha256-51xkTVs6j7n0os5wHWxpFC/uLHm3tz+SiWUHsd+bNRw=",
+    "do_check": false
+  }
+}

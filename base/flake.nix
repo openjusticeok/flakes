@@ -12,67 +12,27 @@
 
       perSystem = { config, self', inputs', pkgs, system, ... }:
         let
-          rv = pkgs.rustPlatform.buildRustPackage {
-            pname = "rv";
-            version = "0.22.2";
+          toolsMetadata = builtins.fromJSON (builtins.readFile ./tools.json);
 
-            src = pkgs.fetchFromGitHub {
-              owner = "A2-ai";
-              repo = "rv";
-              rev = "v0.22.2";
-              hash = "sha256-v9VJ54EZ/UcbELn5nHoyppOrHWhWOagJqoBpVWkAeTg=";
+          resolvePkgs = names: map (name: pkgs.${name}) names;
+
+          buildTool = name: metadata:
+            pkgs.rustPlatform.buildRustPackage {
+              pname = name;
+              version = metadata.version;
+              src = pkgs.fetchFromGitHub {
+                inherit (metadata) owner repo;
+                rev = "${metadata.tag_prefix}${metadata.version}";
+                hash = metadata.hash;
+              };
+              cargoHash = metadata.cargo_hash;
+              buildFeatures = metadata.build_features or [];
+              nativeBuildInputs = resolvePkgs (metadata.native_build_inputs or []);
+              buildInputs = resolvePkgs (metadata.build_inputs or []);
+              doCheck = metadata.do_check or true;
             };
 
-            cargoHash = "sha256-rphrVNnhEKMDUABuAtcUErNduu6zuyY7uDLgpMFCMcU=";
-
-            buildFeatures = [ "cli" ];
-
-            nativeBuildInputs = [ pkgs.pkg-config ];
-            buildInputs = [ pkgs.openssl ];
-
-            doCheck = false;
-          };
-
-          arf = pkgs.rustPlatform.buildRustPackage {
-            pname = "arf";
-            version = "0.4.3";
-            src = pkgs.fetchFromGitHub {
-              owner = "eitsupi";
-              repo = "arf";
-              rev = "v0.4.3";
-              hash = "sha256-CceBGYa24VsJBG7Aza8EcDJe0DoI4+mCXQiZ+HLF4A4=";
-            };
-            cargoHash = "sha256-DHMEmBYrONfxEIOmc9lTN9cEukfJrRg62Lzj3aPnQak=";
-            nativeBuildInputs = [ pkgs.pkg-config ];
-            buildInputs = [ pkgs.openssl ];
-            doCheck = false;
-          };
-
-          jarl = pkgs.rustPlatform.buildRustPackage {
-            pname = "jarl";
-            version = "0.5.0";
-            src = pkgs.fetchFromGitHub {
-              owner = "etiennebacher";
-              repo = "jarl";
-              rev = "0.5.0";
-              hash = "sha256-MFP1xMNnJ9mfHuUu6hqE9B7nRgI2HfXBpblo3sFnAwo=";
-            };
-            cargoHash = "sha256-Rhv9Wku/bRl28nrXYof+6VAgl2K4ysILRQa1v19r0pU=";
-            doCheck = false;
-          };
-
-          air = pkgs.rustPlatform.buildRustPackage {
-            pname = "air";
-            version = "0.10.0";
-            src = pkgs.fetchFromGitHub {
-              owner = "posit-dev";
-              repo = "air";
-              rev = "0.10.0";
-              hash = "sha256-u0icSo6aW6tLgY57RPAoVte5Awn16FLIvZEeeYNr5fk=";
-            };
-            cargoHash = "sha256-51xkTVs6j7n0os5wHWxpFC/uLHm3tz+SiWUHsd+bNRw=";
-            doCheck = false;
-          };
+          tools = pkgs.lib.mapAttrs buildTool toolsMetadata;
 
           rPackages = [ ];
 
@@ -120,10 +80,10 @@
           ];
 
           devShellTools = [
-            rv
-            arf
-            jarl
-            air
+            tools.rv
+            tools.arf
+            tools.jarl
+            tools.air
           ];
 
           rWrapper = pkgs.rWrapper.override {
@@ -136,7 +96,7 @@
 
             buildInputs = rPackages ++ systemDependencies ++ devShellTools ++ [ rWrapper ];
 
-            packages = [ rWrapper rv arf jarl air ];
+            packages = [ rWrapper tools.rv tools.arf tools.jarl tools.air ];
 
             R_HOME = "${pkgs.R}/lib/R";
 

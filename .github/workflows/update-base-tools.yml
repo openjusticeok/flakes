@@ -1,0 +1,72 @@
+name: Update base flake tools
+
+on:
+  schedule:
+    # Mondays at 10:00 UTC
+    - cron: '0 10 * * 1'
+  workflow_dispatch:
+
+jobs:
+  update-tool:
+    name: Update ${{ matrix.tool }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - tool: rv
+            owner: A2-ai
+            repo: rv
+            tag-prefix: v
+          - tool: arf
+            owner: eitsupi
+            repo: arf
+            tag-prefix: v
+          - tool: jarl
+            owner: etiennebacher
+            repo: jarl
+            tag-prefix: ''
+          - tool: air
+            owner: posit-dev
+            repo: air
+            tag-prefix: ''
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Check for updates and patch flake
+        id: update
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          nix develop -c .github/scripts/update-base-tool.sh \
+            "${{ matrix.tool }}" \
+            "${{ matrix.owner }}" \
+            "${{ matrix.repo }}" \
+            "${{ matrix.tag-prefix }}" \
+            | grep -E '^(current_version|latest_version|latest_tag|up_to_date)=' \
+            | tee "$GITHUB_OUTPUT"
+
+      - name: Create pull request
+        if: steps.update.outputs.up_to_date == 'false'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: update/${{ matrix.tool }}-${{ steps.update.outputs.latest_version }}
+          delete-branch: true
+          title: 'chore(base): update ${{ matrix.tool }} to ${{ steps.update.outputs.latest_version }}'
+          body: |
+            Updates `${{ matrix.tool }}` from `${{ steps.update.outputs.current_version }}` to `${{ steps.update.outputs.latest_version }}`.
+
+            Release: https://github.com/${{ matrix.owner }}/${{ matrix.repo }}/releases/tag/${{ steps.update.outputs.latest_tag }}
+
+            > **Note:** PRs opened by `GITHUB_TOKEN` do not trigger CI automatically. Close and reopen this PR to run `flake-checks.yml`.
+          commit-message: 'chore(base): update ${{ matrix.tool }} to ${{ steps.update.outputs.latest_version }}'
