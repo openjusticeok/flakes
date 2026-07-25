@@ -77,6 +77,11 @@
             # Arrow C++ libs (ojoutils depends on arrow)
             arrow-cpp
 
+            # DuckDB C++ lib (ojodb can use duckdb; matching the CRAN R package
+            # version lets it link against the system library instead of compiling
+            # DuckDB from source, which takes ~20 minutes).
+            duckdb
+
             R
           ];
 
@@ -129,10 +134,6 @@
               # force system binaries (git, timedatectl, etc.) to load Nix glibc and
               # break on conventional Linux/macOS distributions.
               export NIX_LDFLAGS_${hostConfig}="${rpathFlags}"
-
-              # V8's configure script downloads a static libv8 build when this
-              # variable is set, avoiding a dependency on a system libv8 package.
-              export DOWNLOAD_STATIC_LIBV8=1
 
               # Let rv manage project-local R packages without touching the Nix R library
               export R_LIBS_USER="$PWD/rv/library"
