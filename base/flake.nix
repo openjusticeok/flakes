@@ -96,6 +96,14 @@
           rWrapper = pkgs.rWrapper.override {
             packages = rPackages;
           };
+
+          # Nix gcc-wrapper uses platform-specific NIX_LDFLAGS_* variables to inject
+          # rpath/runpath flags. We reproduce what stdenv.mkDerivation does for buildInputs
+          # so rv source builds embed Nix library paths in their .so files.
+          hostConfig = pkgs.lib.replaceStrings [ "-" ] [ "_" ] pkgs.stdenv.hostPlatform.config;
+          rpathFlags = pkgs.lib.concatMapStringsSep " " (
+            pkg: "-rpath ${pkgs.lib.getLib pkg}/lib"
+          ) systemDependencies;
         in
         {
           devShells.default = pkgs.mkShell {
@@ -127,7 +135,7 @@
               # Nix gcc wrapper. This avoids needing LD_LIBRARY_PATH, which would
               # force system binaries (git, timedatectl, etc.) to load Nix glibc and
               # break on conventional Linux/macOS distributions.
-              export NIX_LDFLAGS="${pkgs.lib.concatMapStringsSep " " (pkg: "-rpath ${pkgs.lib.getLib pkg}/lib") systemDependencies}"
+              export NIX_LDFLAGS_${hostConfig}="${rpathFlags}"
 
               # V8's configure script downloads a static libv8 build when this
               # variable is set, avoiding a dependency on a system libv8 package.
