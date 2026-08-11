@@ -21,6 +21,10 @@
       flake = {
         inherit base;
         lib = import ./lib { inherit inputs; };
+        templates.default = {
+          description = "opi project shell";
+          path = ./templates/default;
+        };
       };
     };
 }
