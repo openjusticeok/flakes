@@ -1,0 +1,10 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "posit.air",
+  "[r]": {
+    "editor.defaultFormatter": "posit.air"
+  },
+  "air.configPath": "${workspaceFolder}/air.toml",
+  "jarl.configPath": "${workspaceFolder}/jarl.toml",
+  "positron.r.interpreters.default": "${workspaceFolder}/.direnv/bin/R"
+}

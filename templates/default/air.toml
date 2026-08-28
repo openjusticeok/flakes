@@ -1,0 +1,14 @@
+[format]
+line-width = 80
+indent-width = 2
+indent-style = "tab"
+line-ending = "lf"
+persistent-line-breaks = true
+assignment-style = "arrow"
+exclude = [
+  "rv/"
+]
+default-exclude = true
+skip = []
+table = []
+default-table = true

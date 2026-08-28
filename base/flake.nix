@@ -34,8 +34,6 @@
 
           tools = pkgs.lib.mapAttrs buildTool toolsMetadata;
 
-          rPackages = [ ];
-
           systemDependencies = with pkgs; [
             # Generic source-build tooling
             gcc
@@ -98,10 +96,6 @@
             pkgs.google-cloud-sdk
           ];
 
-          rWrapper = pkgs.rWrapper.override {
-            packages = rPackages;
-          };
-
           # Nix gcc-wrapper uses platform-specific NIX_LDFLAGS_* variables to inject
           # rpath/runpath flags. We reproduce what stdenv.mkDerivation does for buildInputs
           # so rv source builds embed Nix library paths in their .so files.
@@ -114,21 +108,11 @@
           devShells.default = pkgs.mkShell {
             name = "opi-base-shell";
 
-            buildInputs = rPackages ++ systemDependencies ++ rTools ++ devShellTools ++ [ rWrapper ];
-
-            packages = [ rWrapper ] ++ rTools ++ devShellTools;
+            packages = systemDependencies ++ rTools ++ devShellTools;
 
             R_HOME = "${pkgs.R}/lib/R";
 
             shellHook = ''
-              echo "opi base shell ready."
-              echo "R: $(which R)"
-              echo "R_HOME: $R_HOME"
-              echo "rv: $(rv --version)"
-              echo "air: $(air --version)"
-              echo "arf: $(arf --version)"
-              echo "jarl: $(jarl --version)"
-
               # Embed Nix native library paths into source-built R packages via the
               # Nix gcc wrapper. This avoids needing LD_LIBRARY_PATH, which would
               # force system binaries (git, timedatectl, etc.) to load Nix glibc and
@@ -136,8 +120,24 @@
               export NIX_LDFLAGS_${hostConfig}="${rpathFlags}"
 
               # Let rv manage project-local R packages without touching the Nix R library
+              export R_LIBS_SITE="$PWD/rv/library"
               export R_LIBS_USER="$PWD/rv/library"
-              mkdir -p "$R_LIBS_USER"
+              mkdir -p "$PWD/rv/library"
+
+              # Prevent ~/.Renviron from overriding project library paths
+              if [ -f "$PWD/.Renviron" ]; then
+                export R_ENVIRON_USER="$PWD/.Renviron"
+              else
+                export R_ENVIRON_USER="/dev/null"
+              fi
+
+              echo "opi base shell ready."
+              echo "R: $(which R)"
+              echo "R_HOME: $R_HOME"
+              echo "rv: $(rv --version)"
+              echo "air: $(air --version)"
+              echo "arf: $(arf --version)"
+              echo "jarl: $(jarl --version)"
             '';
           };
         };
