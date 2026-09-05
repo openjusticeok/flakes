@@ -122,18 +122,14 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1787952434,
-        "narHash": "sha256-OF5MfDNX7y8V/Z4fAlH4Myi1Kwx6Dt9VMP1SJLTXr4w=",
-        "owner": "openjusticeok",
-        "repo": "flakes",
-        "rev": "b13108cfde421b255f87ebfee09e1b5617349818",
-        "type": "github"
+        "path": "../..",
+        "type": "path"
       },
       "original": {
-        "owner": "openjusticeok",
-        "repo": "flakes",
-        "type": "github"
-      }
+        "path": "../..",
+        "type": "path"
+      },
+      "parent": []
     },
     "root": {
       "inputs": {
