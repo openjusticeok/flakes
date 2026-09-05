@@ -11,16 +11,17 @@
     flake-parts.lib.mkFlake { inherit inputs; } {
       systems = inputs.nixpkgs.lib.systems.flakeExposed;
 
-      perSystem = { config, self', inputs', pkgs, system, ... }: {
-        devShells.default = pkgs.mkShell {
-          name = "opi-flakes-shell";
-          packages = with pkgs; [ jq gh ];
-        };
+      imports = [ ./modules/opi.nix ];
+
+      perSystem = { inputs', ... }: {
+        # Repo devshell: the opi base shell via our own module. This flake
+        # owns `base` directly (no opi-flakes input), so wire it here.
+        opi.shells.default.base = inputs'.base.devShells.default;
       };
 
       flake = {
         inherit base;
-        lib = import ./lib { inherit inputs; };
+        flakeModules.opi = import ./modules/opi.nix;
         templates.default = {
           description = "opi project shell";
           path = ./templates/default;
