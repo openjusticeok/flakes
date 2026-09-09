@@ -22,9 +22,23 @@
       flake = {
         inherit base;
         flakeModules.opi = import ./modules/opi.nix;
-        templates.default = {
-          description = "opi project shell";
-          path = ./templates/default;
+        templates = {
+          default = {
+            description = "opi project shell";
+            path = ./templates/default;
+          };
+          census = {
+            description = "opi census project shell";
+            path = ./templates/census;
+          };
+          gis = {
+            description = "opi gis project shell";
+            path = ./templates/gis;
+          };
+          shiny = {
+            description = "opi shiny project shell";
+            path = ./templates/shiny;
+          };
         };
       };
     };
