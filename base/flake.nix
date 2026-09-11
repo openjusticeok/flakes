@@ -228,9 +228,20 @@
             # break on conventional Linux/macOS distributions.
             export NIX_LDFLAGS_${hostConfig}="${rpathFlags}"
 
-            # Let rv manage project-local R packages without touching the Nix R library
+            # Let rv manage project-local R packages without touching the Nix R library.
+            # Default to the plain rv/library path, then refine it to rv's real
+            # versioned library (rv/library/<r_version>/<arch>/...) by asking rv
+            # itself — needed by --vanilla sessions (callr, mirai/crew workers)
+            # that skip .Rprofile activation entirely.
             export R_LIBS_SITE="$PWD/rv/library"
             export R_LIBS_USER="$PWD/rv/library"
+            if [ -f rproject.toml ]; then
+              rv_lib="$(rv info --library 2>/dev/null | sed -n 's/^library:[[:space:]]*//p')"
+              if [ -n "$rv_lib" ]; then
+                export R_LIBS_SITE="$PWD/$rv_lib"
+                export R_LIBS_USER="$PWD/$rv_lib"
+              fi
+            fi
             mkdir -p "$R_LIBS_USER"
 
             # Prevent ~/.Renviron from overriding project library paths
@@ -238,24 +249,6 @@
               export R_ENVIRON_USER="$PWD/.Renviron"
             else
               export R_ENVIRON_USER="/dev/null"
-            fi
-
-            # R sources at most one project profile: the cwd .Rprofile if
-            # present, else R_PROFILE_USER. Pointing R_PROFILE_USER at the
-            # project root's profile (the file `rv activate` manages) makes
-            # rv's library/repo/.rv setup active no matter where in the
-            # project R starts — e.g. quarto rendering a .qmd from a
-            # subdirectory, or Rscript run from one. /dev/null keeps
-            # ~/.Rprofile from leaking in when the project has no profile.
-            # Subprocesses that opt out of profiles (--vanilla: callr,
-            # mirai/crew workers) ignore this entirely and rely on the
-            # R_LIBS_* env vars above, as before. A subdirectory's own
-            # .Rprofile still wins, so rv's documented
-            # source("../.Rprofile") pattern remains valid.
-            if [ -f "$PWD/.Rprofile" ]; then
-              export R_PROFILE_USER="$PWD/.Rprofile"
-            else
-              export R_PROFILE_USER="/dev/null"
             fi
 
             # Pin quarto's R explicitly. quarto's rWrapper override is null,
