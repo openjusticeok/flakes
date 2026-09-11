@@ -32,6 +32,10 @@ dependencies = [
     { name = "ojothemes", git = "https://github.com/openjusticeok/ojothemes", branch = "main" },
     { name = "ojoregex", git = "https://github.com/openjusticeok/ojoregex", branch = "main" },
     "targets",
+    # Quarto knitr engine requirements (quarto in the base shell no
+    # longer bundles rmarkdown via rWrapper).
+    "rmarkdown",
+    "knitr",
     "here",
     # Shiny stack; shinytest2 drives the shiny layer's chromium
     # headlessly for testing.

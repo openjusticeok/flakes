@@ -143,14 +143,17 @@
               meta.mainProgram = "pandoc";
             };
 
-          # Quarto wired to the same R the shell uses (honors R_LIBS_SITE,
-          # so knitr chunks see rv-managed project packages). The overridden
-          # rWrapper also carries nixpkgs rmarkdown as a baseline, letting
-          # rendering work before `rv sync` installs anything project-local.
-          # Typst PDF engine is bundled by nixpkgs quarto; no LaTeX needed.
+          # Quarto uses the shell's own R, discovered from PATH and pinned
+          # explicitly via QUARTO_R in the shell hook. rWrapper is
+          # deliberately null: it would bake nixpkgs rmarkdown into a
+          # separate R instance and put an ELF wrapper shim in the shell
+          # closure (the shim is a bare R front-end that tools like Positron
+          # cannot parse). rmarkdown/knitr are rv-managed project deps via
+          # rproject.toml instead. Typst PDF engine is bundled by nixpkgs
+          # quarto; no LaTeX needed.
           quarto = pkgs.quarto.override {
             pandoc = pandocForQuarto;
-            inherit rWrapper;
+            rWrapper = null;
           };
 
           devShellTools = [
@@ -165,10 +168,6 @@
           ];
 
           fontsConf = pkgs.makeFontsConf { fontDirectories = fonts; };
-
-          rWrapper = pkgs.rWrapper.override {
-            packages = rPackages;
-          };
 
           # Nix gcc-wrapper uses platform-specific NIX_LDFLAGS_* variables to inject
           # rpath/runpath flags. We reproduce what stdenv.mkDerivation does for buildInputs
@@ -258,6 +257,11 @@
             else
               export R_PROFILE_USER="/dev/null"
             fi
+
+            # Pin quarto's R explicitly. quarto's rWrapper override is null,
+            # so quarto would otherwise discover R from PATH; the env var
+            # keeps that choice visible and stable.
+            export QUARTO_R="$(which R)"
           '';
         in
         {
@@ -266,7 +270,7 @@
 
             buildInputs = rPackages ++ systemDependencies;
 
-            packages = [ rWrapper ] ++ rTools ++ devShellTools;
+            packages = rTools ++ devShellTools;
 
             env = shellEnv;
 
