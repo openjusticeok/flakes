@@ -14,7 +14,7 @@
       perSystem = { system, ... }: {
         # The base shell as-is: R, Source Sans 3, rv/air/arf/jarl.
         # No project-specific extras; base.shellEnv vars are already set.
-        devShells.default = opi-flakes.base.devShells.${system}.default;
+        devShells.default = opi-flakes.opi.base.devShells.${system}.default;
       };
     };
 }
