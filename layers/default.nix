@@ -12,4 +12,5 @@ pkgs:
 {
   geo = import ./geo.nix pkgs;
   shiny = import ./shiny.nix pkgs;
+  quarto = import ./quarto.nix pkgs;
 }

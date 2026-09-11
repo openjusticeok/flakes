@@ -102,10 +102,62 @@
             tools.air
           ];
 
+          # Quarto 1.9.x emits pandoc 3.8's `syntax-highlighting` defaults
+          # field, but nixpkgs' pandoc (3.7.0.2) predates that rename
+          # (nixpkgs#461018), so any render fails with
+          # `Unknown option "syntax-highlighting"` (nixpkgs#519484).
+          # 3.8.3 is the pandoc version quarto 1.9 bundles upstream
+          # (quarto-dev/quarto-cli#13249). Drop once nixpkgs ships
+          # pandoc >= 3.8.
+          pandocForQuarto =
+            let
+              inherit (pkgs.stdenv.hostPlatform) isDarwin isAarch64;
+              systemTag =
+                if isDarwin then
+                  (if isAarch64 then "arm64-macOS" else "x86_64-macOS")
+                else if isAarch64 then "linux-arm64" else "linux-amd64";
+              extension = if isDarwin then "zip" else "tar.gz";
+              hash =
+                if isDarwin then
+                  (if isAarch64
+                    then "sha256-Pq6zvRCYKuy6XddhWHRaT4Ba+zmrcqUZu6JTPJjOAC0="
+                    else "sha256-ki41wCENfKIO6TJ4ETYdbX8O8K3aCJ4OdMs3VsPXE/k=")
+                else
+                  (if isAarch64
+                    then "sha256-FmpaNzh+sQvUxPJCqBCb7vdVrB6NTrA5xrXr0dkY2Nc="
+                    else "sha256-wiT6uJ+CfTYjOA7LfBB4wWPHachJoUrCfo07+7kUybQ=");
+            in
+            pkgs.stdenvNoCC.mkDerivation {
+              pname = "pandoc";
+              version = "3.8.3";
+              src = pkgs.fetchurl {
+                url = "https://github.com/jgm/pandoc/releases/download/3.8.3/pandoc-3.8.3-${systemTag}.${extension}";
+                inherit hash;
+              };
+              nativeBuildInputs = [ pkgs.unzip ];
+              # Only the binary is needed; quarto brings its own docs/tools.
+              installPhase = ''
+                mkdir -p $out/bin
+                mv bin/pandoc $out/bin/pandoc
+              '';
+              meta.mainProgram = "pandoc";
+            };
+
+          # Quarto wired to the same R the shell uses (honors R_LIBS_SITE,
+          # so knitr chunks see rv-managed project packages). The overridden
+          # rWrapper also carries nixpkgs rmarkdown as a baseline, letting
+          # rendering work before `rv sync` installs anything project-local.
+          # Typst PDF engine is bundled by nixpkgs quarto; no LaTeX needed.
+          quarto = pkgs.quarto.override {
+            pandoc = pandocForQuarto;
+            inherit rWrapper;
+          };
+
           devShellTools = [
             pkgs.git
             pkgs.gh
             pkgs.google-cloud-sdk
+            quarto
           ];
 
           fonts = with pkgs; [
@@ -169,6 +221,7 @@
             echo "air: $(air --version)"
             echo "arf: $(arf --version)"
             echo "jarl: $(jarl --version)"
+            echo "quarto: $(quarto --version)"
 
             # Embed Nix native library paths into source-built R packages via the
             # Nix gcc wrapper. This avoids needing LD_LIBRARY_PATH, which would
