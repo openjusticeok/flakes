@@ -40,8 +40,8 @@
       opiFlakes = inputs.opi-flakes or null;
 
       defaultBase =
-        if opiFlakes != null && opiFlakes ? base then
-          opiFlakes.base.devShells.${system}.default
+        if opiFlakes != null && opiFlakes ? opi.base then
+          opiFlakes.opi.base.devShells.${system}.default
         else
           throw "opi.shells.<name>.base: no opi-flakes input found in this flake; set base explicitly to an opi base devShell";
 

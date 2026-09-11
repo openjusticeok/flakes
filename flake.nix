@@ -20,7 +20,11 @@
       };
 
       flake = {
-        inherit base;
+        # The opi base devShell, re-exported for downstream auto-wiring
+        # (modules/opi.nix reads `opi-flakes.opi.base.devShells.<system>.default`).
+        # Deliberately not a bare `base` output: nix flake check warns about
+        # unknown flake outputs.
+        opi = { inherit base; };
         flakeModules.opi = import ./modules/opi.nix;
         templates = {
           default = {
