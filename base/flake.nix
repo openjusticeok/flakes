@@ -251,6 +251,16 @@
               export R_ENVIRON_USER="/dev/null"
             fi
 
+            # R sources at most one user Makevars: R_MAKEVARS_USER if set,
+            # else ~/.R/Makevars, and both R CMD INSTALL/SHLIB and make
+            # consult it. Left unguarded it would let a machine-wide
+            # Makevars inject CFLAGS/LDFLAGS/BLAS settings into every
+            # source build rv does, silently breaking or slowing builds
+            # that reproduce fine on other machines. opi builds get their
+            # flags from Nix's wrappers (the NIX_LDFLAGS export below and
+            # pkg-config), so the user Makevars is always /dev/null.
+            export R_MAKEVARS_USER="/dev/null"
+
             # Pin quarto's R explicitly. quarto's rWrapper override is null,
             # so quarto would otherwise discover R from PATH; the env var
             # keeps that choice visible and stable.
