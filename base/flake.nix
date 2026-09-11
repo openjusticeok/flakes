@@ -240,6 +240,24 @@
             else
               export R_ENVIRON_USER="/dev/null"
             fi
+
+            # R sources at most one project profile: the cwd .Rprofile if
+            # present, else R_PROFILE_USER. Pointing R_PROFILE_USER at the
+            # project root's profile (the file `rv activate` manages) makes
+            # rv's library/repo/.rv setup active no matter where in the
+            # project R starts — e.g. quarto rendering a .qmd from a
+            # subdirectory, or Rscript run from one. /dev/null keeps
+            # ~/.Rprofile from leaking in when the project has no profile.
+            # Subprocesses that opt out of profiles (--vanilla: callr,
+            # mirai/crew workers) ignore this entirely and rely on the
+            # R_LIBS_* env vars above, as before. A subdirectory's own
+            # .Rprofile still wins, so rv's documented
+            # source("../.Rprofile") pattern remains valid.
+            if [ -f "$PWD/.Rprofile" ]; then
+              export R_PROFILE_USER="$PWD/.Rprofile"
+            else
+              export R_PROFILE_USER="/dev/null"
+            fi
           '';
         in
         {
