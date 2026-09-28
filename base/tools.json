@@ -20,10 +20,10 @@
   "arf": {
     "owner": "eitsupi",
     "repo": "arf",
-    "version": "0.5.2",
+    "version": "0.5.3",
     "tag_prefix": "v",
-    "hash": "sha256-cmIx03Ll5HryrrHAmQ2B5WenAmIWqehCM3MzjoGSvyk=",
-    "cargo_hash": "sha256-q5Xe95JfkqzNv1CzBFDg/WKqu4g4vnrKLE52qPDU2Bo=",
+    "hash": "sha256-Ema0s5whJwYY9Bg3HSKf1XFWqANzuoJgpqSVsVKBoWg=",
+    "cargo_hash": "sha256-yGV/JSqK03bSoHsvbDyg4d+1Zf59nsT8tg9YH4oL7Lg=",
     "native_build_inputs": [
       "pkg-config"
     ],
