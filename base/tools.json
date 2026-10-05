@@ -44,10 +44,10 @@
   "air": {
     "owner": "posit-dev",
     "repo": "air",
-    "version": "0.11.0",
+    "version": "0.12.0",
     "tag_prefix": "",
-    "hash": "sha256-BWtQLgNFf/kULGvet33k3T1k2oL1hbDn2VPCj0JxrX4=",
-    "cargo_hash": "sha256-xcNVioDbejCLrWMaUA06r9GK5KEIPq6w0W7G7290kOU=",
+    "hash": "sha256-w7A9fwH2d87KtvsfO4kmcTdsE2/UzFu8IybAeTHvYqM=",
+    "cargo_hash": "sha256-vHxBFmXZ5UEs0XPiXYhFcHvM0UFrwKtccTmXDVKEwM4=",
     "do_check": false
   }
 }
