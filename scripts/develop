@@ -1,0 +1,23 @@
+#!/usr/bin/env sh
+# Enter the opi base shell for local development.
+#
+# Until the private package flakes are pushed to github, their inputs must be
+# overridden to the local sibling checkouts. Once pushed, plain
+# `nix develop .#base` works (and this override is unnecessary).
+#
+# Usage:
+#   scripts/develop                 # open the base shell
+#   scripts/develop -c R            # run a command in it
+#   scripts/develop -c 'Rscript -e ".libPaths()"'
+set -eu
+
+here=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+private_root=$(dirname -- "$here")   # e.g. ~/code/openjusticeok
+
+exec nix develop \
+  --override-input ojodb "path:$private_root/ojodb" \
+  --override-input ojothemes "path:$private_root/ojothemes" \
+  --override-input ojoutils "path:$private_root/ojoutils" \
+  --override-input ojoregex "path:$private_root/ojoregex" \
+  --no-write-lock-file \
+  "$here#base" "$@"

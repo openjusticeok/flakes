@@ -1,16 +1,20 @@
-# Public CRAN R package fixes (native deps, postPatch, version bumps).
+# Public CRAN R package fixes — upstream candidates.
 #
-# These are upstream candidates: land the fix here, open a PR against
-# NixOS/nixpkgs pkgs/development/r-modules/default.nix (and/or rstats-on-nix),
-# and drop it here once the pinned revision carries it. Example:
-#
-#   final: prev: {
-#     rPackages = prev.rPackages.override {
-#       overrides = {
-#         somepkg = prev.rPackages.somepkg.overrideAttrs (old: {
-#           buildInputs = (old.buildInputs or [ ]) ++ [ prev.gdal ];
-#         });
-#       };
-#     };
-#   }
-final: prev: { }
+# Returns the `rPackages.overrides` entries for public packages (as opposed to
+# `r-private.nix`, which is for org packages). Both are merged into a single
+# `rPackages.override` in overlays/default.nix, because calling
+# `rPackages.override` twice would clobber the earlier `overrides`.
+{ pkgs, lib ? pkgs.lib }:
+{
+  # nixpkgs' arrow-cpp has GCS/S3 (enableGcs defaults on), but the R `arrow`
+  # bindings' configure misdetects it (ArrowOptions.cmake writes "TRUE" where the
+  # configure expects "ON"), so R arrow reports "built without GCS support".
+  # Force the feature macros and a full (non-minimal) build so GCS/S3 are in.
+  arrow = pkgs.rPackages.arrow.overrideAttrs (old: {
+    env = (old.env or { }) // {
+      ARROW_R_CXXFLAGS = "-DARROW_R_WITH_GCS -DARROW_R_WITH_S3";
+      LIBARROW_MINIMAL = "false";
+      ARROW_USE_PKG_CONFIG = "true";
+    };
+  });
+}

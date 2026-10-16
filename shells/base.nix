@@ -38,6 +38,11 @@
         "pointblank"
         # data platform
         "arrow"
+        # org packages (wired via overlays/r-private.nix)
+        "ojodb"
+        "ojothemes"
+        "ojoutils"
+        "ojoregex"
       ];
 
       # Build/runtime tooling available to analysts. Nix builds R packages in
@@ -186,23 +191,6 @@
         # Pin quarto's R explicitly (quarto's rWrapper override is null, so it
         # would otherwise discover R from PATH).
         export QUARTO_R="$(which R)"
-
-        # Let a GUI Positron (launched from the Dock, so it does NOT inherit this
-        # shell's environment) use this project's R + packages, and switch
-        # projects in the GUI. R reads ./.Renviron automatically for the library
-        # paths; .nix-bin/R gives Positron a stable, workspace-relative
-        # interpreter path (set positron.r.interpreters.default to
-        # ''${workspaceFolder}/.nix-bin/R). Both files are gitignored and
-        # regenerated on every shell entry.
-        if [ -n "''${R_LIBS_SITE:-}" ]; then
-          cat > .Renviron <<EOF
-R_LIBS_SITE=''${R_LIBS_SITE}
-R_LIBS_USER=''${R_LIBS_USER:-}
-EOF
-        fi
-        mkdir -p .nix-bin
-        ln -sf "$(command -v R)" .nix-bin/R
-        ln -sf "$(command -v Rscript)" .nix-bin/Rscript
       '';
     in
     {

@@ -69,9 +69,6 @@ _targets/
 # direnv local cache
 .direnv/
 
-# Generated interpreter shims for GUI Positron
-.nix-bin/
-
 # Environment files
 .env
 
