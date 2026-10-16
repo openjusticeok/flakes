@@ -5,9 +5,7 @@ indent-style = "tab"
 line-ending = "lf"
 persistent-line-breaks = true
 assignment-style = "arrow"
-exclude = [
-  "rv/"
-]
+exclude = []
 default-exclude = true
 skip = []
 table = []

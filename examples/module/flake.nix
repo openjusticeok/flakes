@@ -2,37 +2,36 @@
   description = "opi project using the opi flake-parts module";
 
   inputs = {
-    # Pin everything to the versions opi-flakes itself uses, so pkgs (and
-    # everything built from it) matches the base shell's nixpkgs exactly.
-    opi-flakes.url = "path:../..";
-    nixpkgs.follows = "opi-flakes/nixpkgs";
-    flake-parts.follows = "opi-flakes/flake-parts";
+    # Pin everything to the versions opi itself uses, so pkgs (and everything
+    # built from it) matches the base shell's nixpkgs exactly.
+    opi.url = "path:../..";
+    nixpkgs.follows = "opi/nixpkgs";
+    flake-parts.follows = "opi/flake-parts";
   };
 
-  outputs = inputs@{ self, nixpkgs, flake-parts, opi-flakes, ... }:
+  outputs = inputs@{ opi, nixpkgs, flake-parts, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } {
       systems = nixpkgs.lib.systems.flakeExposed;
 
-      imports = [ opi-flakes.flakeModules.opi ];
+      imports = [ opi.flakeModules.default ];
 
-      # `base` is auto-wired from the opi-flakes input above; each
-      # opi.shells entry below becomes devShells.<name> (`nix develop
-      # .#geo` etc.). Adjacent shells are independent: each is base +
-      # its own opts, and they share nothing beyond base.
+      # `base` is auto-wired from the opi input. Each opi.shells entry becomes
+      # devShells.<name>. Adjacent shells are independent: each is base + its
+      # own opts, sharing nothing beyond base.
       #
-      # Typical projects just reference shipped layers (geo, shiny, ...)
-      # and add project-specific packages/env/hooks — see examples/project.
-      # Defining an opi.layers entry here is rare; it's shown once for
-      # completeness: this project has two shells that share one bundle.
+      # Typical projects reference shipped bundles (geo, shiny, ...) and add
+      # project-specific extras — see examples/project. Defining an
+      # opi.bundles entry here is the exception: this project has two shells
+      # that share one bundle.
       perSystem = { pkgs, ... }: {
-        opi.layers.analysis = {
+        opi.bundles.analysis = {
           packages = with pkgs; [
             duckdb
             postgresql
           ];
 
           shellHook = ''
-            echo "analysis layer ready: duckdb + postgresql."
+            echo "analysis bundle ready: duckdb + postgresql."
           '';
         };
 
@@ -41,12 +40,11 @@
         '';
 
         opi.shells.analysis = {
-          layers = [ "analysis" ];
-
+          bundles = [ "analysis" ];
           packages = [ pkgs.gnuplot ];
         };
 
-        opi.shells.shiny.layers = [ "shiny" ];
+        opi.shells.shiny.bundles = [ "shiny" ];
       };
     };
 }
