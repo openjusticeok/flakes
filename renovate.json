@@ -1,0 +1,22 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard"
+  ],
+  "nix": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "description": "Bump flake inputs (rstats-on-nix nixpkgs + private package flakes) monthly, grouped.",
+      "matchManagers": [
+        "nix"
+      ],
+      "groupName": "flake inputs",
+      "schedule": [
+        "before 10am on the first day of the month"
+      ]
+    }
+  ]
+}

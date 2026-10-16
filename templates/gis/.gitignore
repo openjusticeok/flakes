@@ -59,10 +59,6 @@ data/*
 # Unignore everything inside that directory
 #!data/input/reference/**
 
-# Local rv R package library
-rv/*
-!rv/scripts/
-
 # targets pipeline store
 _targets/
 
