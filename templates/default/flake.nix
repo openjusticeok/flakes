@@ -2,30 +2,30 @@
   description = "opi project";
 
   inputs = {
-    opi-flakes.url = "github:openjusticeok/flakes";
-    nixpkgs.follows = "opi-flakes/nixpkgs";
-    flake-parts.follows = "opi-flakes/flake-parts";
+    opi.url = "github:openjusticeok/flakes";
+    nixpkgs.follows = "opi/nixpkgs";
+    flake-parts.follows = "opi/flake-parts";
   };
 
-  outputs = inputs@{ self, nixpkgs, flake-parts, opi-flakes, ... }:
+  outputs = inputs@{ opi, nixpkgs, flake-parts, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } {
       systems = nixpkgs.lib.systems.flakeExposed;
 
-      imports = [ opi-flakes.flakeModules.opi ];
+      imports = [ opi.flakeModules.default ];
 
-      # opi.shells entries become devShells.<name>, wrapping the opi
-      # base shell (R, Source Sans 3, rv/air/arf/jarl) automatically.
-      # Add project packages/env/hooks here, e.g.:
-      #   perSystem = { pkgs, ... }: {
-      #     opi.shells.default = {
-      #       packages = [ pkgs.gdal ];
-      #       env.PROJ_DATA = "${pkgs.proj}/share/proj";
-      #     };
+      # Each opi.shells.<name> entry becomes devShells.<name>, wrapping the opi
+      # base shell automatically. List R packages by CRAN name; they resolve
+      # against pkgs.rPackages (org + nixpkgs). Add Nix packages, env, hooks:
+      #   opi.shells.default = {
+      #     rPackages = [ "dplyr" "data.table" ];
+      #     packages = [ pkgs.jq ];
+      #     env.R_MAX_VSIZE = "32Gb";
+      #     shellHook = ''echo ready'';
       #   };
-      # For bundles shared by multiple shells, use opi.layers.<name>
-      # and reference them via opi.shells.<name>.layers.
       perSystem = { ... }: {
-        opi.shells.default = { };
+        opi.shells.default = {
+          rPackages = [ "dplyr" "ggplot2" ];
+        };
       };
     };
 }

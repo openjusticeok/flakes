@@ -1,7 +1,6 @@
 [lint]
 extend-select = ["DPLYR", "TESTTHAT"]
 default-exclude = true
-exclude = ["rv/"]
 fix-roxygen = true
 
 [lint.assignment]

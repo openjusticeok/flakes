@@ -6,5 +6,5 @@
   },
   "air.configPath": "${workspaceFolder}/air.toml",
   "jarl.configPath": "${workspaceFolder}/jarl.toml",
-  "positron.r.interpreters.default": "${workspaceFolder}/.direnv/bin/R"
+  "positron.r.interpreters.default": "${workspaceFolder}/.nix-bin/R"
 }

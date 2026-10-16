@@ -2,21 +2,32 @@
   description = "opi census project";
 
   inputs = {
-    opi-flakes.url = "github:openjusticeok/flakes";
-    nixpkgs.follows = "opi-flakes/nixpkgs";
-    flake-parts.follows = "opi-flakes/flake-parts";
+    opi.url = "github:openjusticeok/flakes";
+    nixpkgs.follows = "opi/nixpkgs";
+    flake-parts.follows = "opi/flake-parts";
   };
 
-  outputs = inputs@{ self, nixpkgs, flake-parts, opi-flakes, ... }:
+  outputs = inputs@{ opi, nixpkgs, flake-parts, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } {
       systems = nixpkgs.lib.systems.flakeExposed;
 
-      imports = [ opi-flakes.flakeModules.opi ];
+      imports = [ opi.flakeModules.default ];
 
-      # Census data work: tidycensus/tigris on the geo layer's
-      # gdal/geos/proj toolchain. R dependencies live in rproject.toml.
+      # Census data work on the geo bundle's gdal/geos/proj toolchain.
       perSystem = { ... }: {
-        opi.shells.default.layers = [ "geo" ];
+        opi.shells.default = {
+          bundles = [ "geo" ];
+          rPackages = [
+            "tidycensus"
+            "tigris"
+            "crsuggest"
+            "sf"
+            "dplyr"
+            "targets"
+            "rmarkdown"
+            "knitr"
+          ];
+        };
       };
     };
 }
