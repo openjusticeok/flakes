@@ -20,6 +20,90 @@
         "type": "github"
       }
     },
+    "flake-parts_2": {
+      "inputs": {
+        "nixpkgs-lib": [
+          "ojodb",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1790898470,
+        "narHash": "sha256-zTwuwezD0w3hpga6a6P8emidzAZFyWqlNeRBlpWOOl8=",
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "rev": "024633cd702b10285db5cb19b40ad48d2399ba60",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "type": "github"
+      }
+    },
+    "flake-parts_3": {
+      "inputs": {
+        "nixpkgs-lib": [
+          "ojoregex",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1790898470,
+        "narHash": "sha256-zTwuwezD0w3hpga6a6P8emidzAZFyWqlNeRBlpWOOl8=",
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "rev": "024633cd702b10285db5cb19b40ad48d2399ba60",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "type": "github"
+      }
+    },
+    "flake-parts_4": {
+      "inputs": {
+        "nixpkgs-lib": [
+          "ojothemes",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1790898470,
+        "narHash": "sha256-zTwuwezD0w3hpga6a6P8emidzAZFyWqlNeRBlpWOOl8=",
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "rev": "024633cd702b10285db5cb19b40ad48d2399ba60",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "type": "github"
+      }
+    },
+    "flake-parts_5": {
+      "inputs": {
+        "nixpkgs-lib": [
+          "ojoutils",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1790898470,
+        "narHash": "sha256-zTwuwezD0w3hpga6a6P8emidzAZFyWqlNeRBlpWOOl8=",
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "rev": "024633cd702b10285db5cb19b40ad48d2399ba60",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1792124203,
@@ -36,10 +120,108 @@
         "type": "github"
       }
     },
+    "ojodb": {
+      "inputs": {
+        "flake-parts": "flake-parts_2",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1792182058,
+        "narHash": "sha256-J+PZsvLa4favowfG7GO5rM8m1aFL0Us1yaWu7g7naaM=",
+        "owner": "openjusticeok",
+        "repo": "ojodb",
+        "rev": "242697f208ddddf70733ea6b7ff0a1ba7c5c2b17",
+        "type": "github"
+      },
+      "original": {
+        "owner": "openjusticeok",
+        "ref": "ojodb-v3",
+        "repo": "ojodb",
+        "type": "github"
+      }
+    },
+    "ojoregex": {
+      "inputs": {
+        "flake-parts": "flake-parts_3",
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "ojodb": [
+          "ojodb"
+        ]
+      },
+      "locked": {
+        "lastModified": 1792184984,
+        "narHash": "sha256-3LQq32ykavTxpt7pWGiC7jPBOzhPcMrfq5gVs9kiyKI=",
+        "owner": "openjusticeok",
+        "repo": "ojoregex",
+        "rev": "553a03aaa83f6557091ed629c0d7794d7ba41c33",
+        "type": "github"
+      },
+      "original": {
+        "owner": "openjusticeok",
+        "ref": "ojoregex-v0.10.2",
+        "repo": "ojoregex",
+        "type": "github"
+      }
+    },
+    "ojothemes": {
+      "inputs": {
+        "flake-parts": "flake-parts_4",
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "ojodb": [
+          "ojodb"
+        ]
+      },
+      "locked": {
+        "lastModified": 1792183455,
+        "narHash": "sha256-KSCD3ddoXseD/72tmwX5t5AqsSrTGWR2qES6ezwrfBs=",
+        "owner": "openjusticeok",
+        "repo": "ojothemes",
+        "rev": "0bf306d28d23c010871129d4d35c99edc607ea7e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "openjusticeok",
+        "ref": "ojothemes-v2",
+        "repo": "ojothemes",
+        "type": "github"
+      }
+    },
+    "ojoutils": {
+      "inputs": {
+        "flake-parts": "flake-parts_5",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1792187660,
+        "narHash": "sha256-uWOEMQTL0P1ZPKUBJIZP3LWW5x3gYdOLQn1gv632Cno=",
+        "owner": "openjusticeok",
+        "repo": "ojoutils",
+        "rev": "6a12b50a68d3a58103be40e5f478ca8af976cb37",
+        "type": "github"
+      },
+      "original": {
+        "owner": "openjusticeok",
+        "ref": "ojoutils-v0.3.1",
+        "repo": "ojoutils",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "flake-parts": "flake-parts",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "ojodb": "ojodb",
+        "ojoregex": "ojoregex",
+        "ojothemes": "ojothemes",
+        "ojoutils": "ojoutils"
       }
     }
   },

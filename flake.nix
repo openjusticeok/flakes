@@ -19,9 +19,26 @@
     flake-parts.url = "github:hercules-ci/flake-parts";
     flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs";
 
-    # Private package flakes (P1) go here, each with:
-    #   inputs.nixpkgs.follows = "nixpkgs";
-    # so the whole closure shares this repo's single nixpkgs pin.
+    # Private package flakes. Each is self-contained and pins nixpkgs, which
+    # follows ours here so the whole closure shares one nixpkgs pin.
+    ojodb = {
+      url = "github:openjusticeok/ojodb/ojodb-v3";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    ojothemes = {
+      url = "github:openjusticeok/ojothemes/ojothemes-v2";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.ojodb.follows = "ojodb";
+    };
+    ojoutils = {
+      url = "github:openjusticeok/ojoutils/ojoutils-v0.3.1";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    ojoregex = {
+      url = "github:openjusticeok/ojoregex/ojoregex-v0.10.2";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.ojodb.follows = "ojodb";
+    };
   };
 
   outputs = inputs@{ flake-parts, ... }:
@@ -35,10 +52,12 @@
       ];
 
       perSystem = { self', system, lib, ... }: {
-        # positron-bin is unfree; allow only it so the shell can ship Positron
-        # (which must share this nixpkgs' glibc with R).
+        # Apply the version-of-record overlay (private R packages, R overrides,
+        # system pins) to this repo's own pkgs, so the base shell and resolver
+        # see it. positron-bin is unfree; allow only it.
         _module.args.pkgs = import inputs.nixpkgs {
           inherit system;
+          overlays = [ (import ./overlays { inherit inputs; }) ];
           config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) [ "positron-bin" ];
         };
 

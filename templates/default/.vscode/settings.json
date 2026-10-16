@@ -5,6 +5,5 @@
     "editor.defaultFormatter": "posit.air"
   },
   "air.configPath": "${workspaceFolder}/air.toml",
-  "jarl.configPath": "${workspaceFolder}/jarl.toml",
-  "positron.r.interpreters.default": "${workspaceFolder}/.nix-bin/R"
+  "jarl.configPath": "${workspaceFolder}/jarl.toml"
 }

@@ -1,24 +1,18 @@
-# Private (org) R packages, injected into pkgs.rPackages so the name resolver
-# and shells see one unified namespace.
+# Private (org) R packages, as `rPackages.overrides` entries.
 #
-# Private package repos are self-contained flakes consumed as inputs (see
-# flake.nix), each pinned to this repo's nixpkgs via `inputs.nixpkgs.follows`.
-# P1 wires them here, e.g.:
+# Each private package is a self-contained flake consumed as an input (see
+# flake.nix), pinned to this repo's nixpkgs via `inputs.nixpkgs.follows`. Merged
+# with r-public.nix into one `rPackages.override` in overlays/default.nix.
 #
-#   { inputs }:
-#   final: prev:
-#   let
-#     system = prev.stdenv.hostPlatform.system;
-#   in
-#   {
-#     rPackages = prev.rPackages.override {
-#       overrides = prev.rPackages.overrides or { } // {
-#         ojodb = inputs.ojodb.packages.${system}.ojodb;
-#         ojoutils = inputs.ojoutils.packages.${system}.ojoutils;
-#         ojothemes = inputs.ojothemes.packages.${system}.ojothemes;
-#         ojoregex = inputs.ojoregex.packages.${system}.ojoregex;
-#       };
-#     };
-#   }
-{ inputs ? { } }:
-final: prev: { }
+# Lazy: only packages whose flake is actually an input are included, so absent
+# inputs never force their thunk.
+{ inputs, lib, system }:
+let
+  candidates = {
+    ojodb = inputs.ojodb.packages.${system}.ojodb;
+    ojothemes = inputs.ojothemes.packages.${system}.ojothemes;
+    ojoutils = inputs.ojoutils.packages.${system}.ojoutils;
+    ojoregex = inputs.ojoregex.packages.${system}.ojoregex;
+  };
+in
+lib.filterAttrs (name: _: inputs ? ${name}) candidates
