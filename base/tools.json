@@ -2,10 +2,10 @@
   "rv": {
     "owner": "A2-ai",
     "repo": "rv",
-    "version": "0.23.1",
+    "version": "0.23.2",
     "tag_prefix": "v",
-    "hash": "sha256-JH5FaNoKCj0q5x1YmnqgOfq6t1lOBZ1bmDKteWVS918=",
-    "cargo_hash": "sha256-p94UXGR5dsfL11QcRytiryAAxYIt96sjXOCDIl/ym0A=",
+    "hash": "sha256-WdKtuT/9zl9mk4EISDbLOXik2k/q+jH+4hcq/SyF4z0=",
+    "cargo_hash": "sha256-3OZuXzowHxCGlOmMBpRVZM7auQpLuz/xQbdF4DVPZNk=",
     "build_features": [
       "cli"
     ],
