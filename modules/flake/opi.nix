@@ -26,6 +26,10 @@
 # The base shell is auto-wired from the `opi` input and can be set explicitly.
 # Predefined bundles (shells/bundles/: geo, shiny, quarto) are merged in as
 # defaults; projects can include, extend, or override them.
+#
+# Names in `rPackages` resolve against the org's package set (the caller's
+# nixpkgs + opi's exported overlay), so a project can name org packages as well
+# as public ones and gets the same derivations the base shell ships.
 { flake-parts-lib, inputs, lib, ... }:
 {
   options.perSystem = flake-parts-lib.mkPerSystemOption (
@@ -39,8 +43,22 @@
         else
           throw "opi.shells.<name>.base: no `opi` input with a base devShell found; set base explicitly to an opi base devShell";
 
+      # Compose shells out of the version-of-record package set: apply opi's
+      # exported overlay to the caller's pkgs so R package resolution sees the
+      # org's R overrides (overlays/r-public.nix) and private packages
+      # (the org packages wired in overlays/default.nix). Without it a project listing "arrow" pulls a
+      # second, unpatched arrow that shadows the base shell's on R_LIBS_SITE,
+      # and private names ("ojodb") are unresolvable. Falls back to plain pkgs
+      # with no `opi` input (e.g. a vendored copy of this file); private names
+      # then fail with the resolver's request-to-add message.
+      pkgsOpi =
+        if opi != null && opi ? overlays && opi.overlays ? default then
+          pkgs.extend opi.overlays.default
+        else
+          pkgs;
+
       # CRAN-name -> derivation resolver (pkgs.rPackages, dot -> underscore).
-      rp = import ../../lib/rPackages.nix { inherit pkgs lib; };
+      rp = import ../../lib/rPackages.nix { pkgs = pkgsOpi; inherit lib; };
 
       # Predefined bundles shipped with opi (shells/bundles/), exposed as
       # opi.bundles defaults. env values are mkDefault so projects can override
@@ -49,7 +67,7 @@
         _: entry:
           lib.recursiveUpdate entry
             { env = lib.mapAttrs (_: lib.mkDefault) (entry.env or { }); }
-      ) (import ../../shells/bundles pkgs);
+      ) (import ../../shells/bundles pkgsOpi);
 
       entrySubmodule = {
         options = {
@@ -88,7 +106,7 @@
           # R packages contributed by bundles first, then the shell's own.
           allRPackages = lib.concatMap (b: b.rPackages) appliedBundles ++ cfg.rPackages;
         in
-        pkgs.mkShell {
+        pkgsOpi.mkShell {
           inherit (cfg) name;
           inputsFrom = [ base ];
           buildInputs = rp.resolveMany allRPackages;
@@ -112,12 +130,21 @@
         description = "Named bundles of packages/env/shellHook that shells include via opi.shells.<name>.bundles. Predefined ones (geo, shiny, quarto) ship with opi.";
       };
 
-      config.opi.bundles = shippedBundles;
+      # Shipped bundles first, then the deprecated `opi.layers` aliases. mkMerge
+      # keeps same-named entries merged as submodules instead of replacing them.
+      config.opi.bundles = lib.mkMerge [ shippedBundles config.opi.layers ];
+
+      # Deprecated: `opi.layers` was renamed to `opi.bundles` (delete in P4).
+      options.opi.layers = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.submodule entrySubmodule);
+        default = { };
+        description = "Deprecated alias for opi.bundles.";
+      };
 
       options.opi.shells = lib.mkOption {
         type = lib.types.attrsOf (
           lib.types.submodule (
-            { name, ... }:
+            { name, config, ... }:
             {
               options = {
                 base = lib.mkOption {
@@ -136,6 +163,12 @@
                   type = lib.types.listOf lib.types.str;
                   default = [ ];
                   description = "opi.bundles entries applied to this shell, in list order, before the shell's own opts.";
+                };
+
+                layers = lib.mkOption {
+                  type = lib.types.listOf lib.types.str;
+                  default = [ ];
+                  description = "Deprecated alias for bundles.";
                 };
 
                 rPackages = lib.mkOption {
@@ -162,6 +195,10 @@
                   description = "Extra shell hook lines, run after the base shell's and bundles' setup.";
                 };
               };
+
+              # Deprecated: `opi.shells.<name>.layers` was renamed to `bundles`
+              # (delete in P4). List options concatenate, so both spellings work.
+              config.bundles = config.layers;
             }
           )
         );

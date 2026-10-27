@@ -47,6 +47,7 @@
 
       imports = [
         ./shells/base.nix
+        ./shells/private.nix
         ./modules/flake/opi.nix
         ./checks
       ];
