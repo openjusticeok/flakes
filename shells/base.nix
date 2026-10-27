@@ -3,16 +3,19 @@
 # Contract with modules/flake/opi.nix: the base shell exposes
 # passthru.shellEnv and passthru.shellHook, which project shells layer on top
 # of. Keep both when changing this file.
-{ ... }:
+{ inputs, ... }:
 {
-  perSystem = { pkgs, lib, ... }:
+  perSystem = { pkgs, lib, system, ... }:
     let
       # CRAN-name -> pkgs.rPackages resolver (see lib/rPackages.nix).
       rp = import ../lib/rPackages.nix { inherit pkgs lib; };
 
+      # Org packages (private, from their own flakes). Single source of truth is
+      # lib/orgPackages.nix; overlays/default.nix puts them in pkgs.rPackages.
+      org = import ../lib/orgPackages.nix { inherit inputs system lib; };
+
       # Org-standard R packages, present in every opi shell. Projects add their
-      # own extras via opi.shells.<name>.rPackages. (Private org packages --
-      # ojodb, ojoutils, ojothemes, ojoregex -- join this set in P1.)
+      # own extras via opi.shells.<name>.rPackages.
       standardRPackages = [
         # tidyverse core
         "dplyr"
@@ -38,12 +41,9 @@
         "pointblank"
         # data platform
         "arrow"
-        # org packages (wired via overlays/r-private.nix)
-        "ojodb"
-        "ojothemes"
-        "ojoutils"
-        "ojoregex"
-      ];
+      ]
+      # org packages (wired via overlays/default.nix)
+      ++ org.names;
 
       # Build/runtime tooling available to analysts. Nix builds R packages in
       # their own closures, so these are for interactive/ad-hoc work, not for
@@ -177,6 +177,16 @@
         # store path so ad-hoc install.packages() cannot persist. Packages come
         # from the shell's rPackages (via R's setup hook -> R_LIBS_SITE).
         R_LIBS_USER = "${pkgs.emptyDirectory}";
+
+        # R also sources machine-wide user config: ~/.Renviron (which can reset
+        # R_LIBS_*/R_PROFILE and so defeat the immutability above) and
+        # ~/.R/Makevars (which injects CFLAGS/LDFLAGS/BLAS into every local
+        # source compile, e.g. devtools::load_all() on a package with compiled
+        # code). Both pin away so a shell behaves identically on every machine:
+        # R env vars and build flags belong in `opi.shells.<name>.env` (project)
+        # or here (org default), never in a developer's home directory.
+        R_ENVIRON_USER = "/dev/null";
+        R_MAKEVARS_USER = "/dev/null";
       };
 
       shellHook = ''
