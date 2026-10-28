@@ -7,16 +7,21 @@
     flake-parts.follows = "opi/flake-parts";
   };
 
-  outputs = inputs@{ opi, nixpkgs, flake-parts, ... }:
-    flake-parts.lib.mkFlake { inherit inputs; } {
+  outputs = inputs @ {
+    opi,
+    nixpkgs,
+    flake-parts,
+    ...
+  }:
+    flake-parts.lib.mkFlake {inherit inputs;} {
       systems = nixpkgs.lib.systems.flakeExposed;
 
-      imports = [ opi.flakeModules.default ];
+      imports = [opi.flakeModules.default];
 
       # Census data work on the geo bundle's gdal/geos/proj toolchain.
-      perSystem = { ... }: {
+      perSystem = {...}: {
         opi.shells.default = {
-          bundles = [ "geo" ];
+          bundles = ["geo"];
           rPackages = [
             "tidycensus"
             "tigris"

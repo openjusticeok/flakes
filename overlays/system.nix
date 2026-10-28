@@ -9,18 +9,17 @@
 #       patches = (old.patches or [ ]) ++ [ ./patches/some-lib-fix.patch ];
 #     });
 #   }
-final: prev:
-{
+final: prev: {
   # nixpkgs' jarl 0.6.0-unstable fails its check phase on aarch64-darwin: the
   # test suite's expected-output regex rejects the temporary directory paths a
   # nix build produces, so `nix develop` aborts while building the tool. The
   # binary itself is healthy on macOS (issue #34), so skip the check there and
   # keep it everywhere else. Drop this once nixpkgs carries the upstream fix.
   jarl =
-    if prev.stdenv.hostPlatform.isDarwin then
+    if prev.stdenv.hostPlatform.isDarwin
+    then
       prev.jarl.overrideAttrs (_: {
         doCheck = false;
       })
-    else
-      prev.jarl;
+    else prev.jarl;
 }

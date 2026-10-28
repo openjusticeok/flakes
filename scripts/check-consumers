@@ -1,0 +1,160 @@
+#!/usr/bin/env sh
+# Check every consumer-shaped flake in this repo against the working tree:
+# examples/, templates/, and the module fixtures under checks/fixtures/.
+#
+# This cannot be a `nix flake check` entry: evaluating another flake needs a
+# second `nix` process, and a sandboxed build cannot add the path inputs that
+# process would have to copy into the store. So it lives here, where a `nix` and
+# a network are available — CI runs it, and it is the one command to run locally
+# after touching the module, the base shell, or a template.
+#
+# `opi` is always overridden to this working tree, so a stale example lock can
+# never make a green run prove the wrong thing; `--no-write-lock-file` keeps the
+# tree clean.
+#
+# Usage:
+#   ./scripts/check-consumers             # evaluate everything (read-only)
+#   ./scripts/check-consumers template    # only names matching "template"
+#   ./scripts/check-consumers --locks     # also verify examples' flake.lock is current
+#
+# `--locks` rewrites examples/*/flake.lock in place when it is stale, which is
+# the fix — commit the result. CI runs with `--locks`.
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+system=${OPI_CHECK_SYSTEM:-x86_64-linux}
+
+check_locks=0
+filter=''
+for arg in "$@"; do
+  case "$arg" in
+    --locks) check_locks=1 ;;
+    -h | --help)
+      sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
+    *) filter=$arg ;;
+  esac
+done
+
+pass=0
+fail=0
+
+# stderr of the current eval. Written by a redirect at the call site (a variable
+# set inside `$(...)` would not survive the subshell).
+errfile=$(mktemp)
+
+# One system is enough: a template or example that evaluates on x86_64-linux has
+# a sound flake.nix, and the three-platform matrix already evaluates the repo's
+# own outputs everywhere.
+#
+# The `--apply` forces every shell's drvPath and only then returns the names:
+# `attrNames` alone never forces the values, so a shell that throws while
+# composing (unknown bundle, bad base) would look like a pass.
+eval_shells() {
+  nix eval --no-write-lock-file \
+    --override-input opi "path:$root" \
+    "$1#devShells.$system" \
+    --apply 's: builtins.deepSeq (map (v: v.drvPath) (builtins.attrValues s)) (builtins.attrNames s)'
+}
+
+report_pass() {
+  pass=$((pass + 1))
+  printf 'ok    %-24s %s\n' "$1" "$2"
+}
+
+report_fail() {
+  fail=$((fail + 1))
+  printf 'FAIL  %-24s %s\n' "$1" "$2"
+  if [ -s "$errfile" ]; then
+    sed 's/^/        /' "$errfile"
+  fi
+  return 0
+}
+
+selected() {
+  case "$1" in
+    *"$filter"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Must evaluate; prints the resulting devShell names.
+expect_ok() {
+  selected "$1" || return 0
+  if out=$(eval_shells "$2" 2>"$errfile"); then
+    report_pass "$1" "$out"
+  else
+    report_fail "$1" "expected evaluation to succeed"
+  fi
+}
+
+# Must fail, and the error must contain every listed pattern — a throw for the
+# wrong reason (or a message that lost its actionable part) is not a pass.
+expect_fail() {
+  selected "$1" || return 0
+  name=$1 dir=$2
+  shift 2
+  if out=$(eval_shells "$dir" 2>"$errfile"); then
+    report_fail "$name" "expected evaluation to fail, got $out"
+    return 0
+  fi
+  for pattern in "$@"; do
+    if ! grep -qF -- "$pattern" "$errfile"; then
+      report_fail "$name" "failed without matching '$pattern'"
+      return 0
+    fi
+  done
+  report_pass "$name" "rejected as expected"
+}
+
+printf 'opi consumer checks (%s)\n\n' "$system"
+
+# Only directories that actually hold a flake: a stray leftover directory (a
+# deleted example whose empty `rv/library` still sits on someone's disk) makes
+# `nix eval <dir>` search *upward* and quietly evaluate this repo's own flake.
+for dir in "$root"/examples/*/; do
+  [ -f "$dir/flake.nix" ] || continue
+  expect_ok "example/$(basename "$dir")" "${dir%/}"
+done
+
+for dir in "$root"/templates/*/; do
+  [ -f "$dir/flake.nix" ] || continue
+  expect_ok "template/$(basename "$dir")" "${dir%/}"
+done
+
+expect_ok "fixture/module-ok" "$root/checks/fixtures/module-ok"
+
+# PLAN invariant #4: unknown names fail with nearest matches.
+expect_fail "fixture/bad-rpackage" "$root/checks/fixtures/bad-rpackage" \
+  'unknown package(s): dplry' 'Did you mean' 'dplyr'
+
+# A typo'd bundle must not silently drop its packages.
+expect_fail "fixture/bad-bundle" "$root/checks/fixtures/bad-bundle" \
+  "unknown bundle 'no-such-bundle'"
+
+# A base shell that is not an opi base shell must not drop R_HOME or the setup hook.
+expect_fail "fixture/bad-base" "$root/checks/fixtures/bad-base" \
+  'not an opi base shell'
+
+if [ "$check_locks" = 1 ]; then
+  printf '\nexample locks\n\n'
+  for dir in "$root"/examples/*/; do
+    [ -f "$dir/flake.nix" ] || continue
+    dir=${dir%/}
+    name="lock/$(basename "$dir")"
+    selected "$name" || continue
+    # A stale path-input lock is silent: its narHash pins an old snapshot of this
+    # tree, so a green example proves nothing. Re-lock and compare.
+    if ! nix flake lock --update-input opi "$dir" >/dev/null 2>&1; then
+      report_fail "$name" "could not re-lock ($dir)"
+    elif git -C "$root" diff --quiet -- "${dir#"$root"/}/flake.lock"; then
+      report_pass "$name" "current"
+    else
+      report_fail "$name" "stale; the corrected lock is now in the tree — commit it"
+    fi
+  done
+fi
+
+printf '\n%d passed, %d failed\n' "$pass" "$fail"
+[ "$fail" -eq 0 ]

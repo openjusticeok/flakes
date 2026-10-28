@@ -6,7 +6,7 @@
   # Nix prompts once per flake to accept this; opt out with `accept-flake-config
   # = false` in nix.conf.
   nixConfig = {
-    extra-substituters = [ "https://rstats-on-nix.cachix.org" ];
+    extra-substituters = ["https://rstats-on-nix.cachix.org"];
     extra-trusted-public-keys = [
       "rstats-on-nix.cachix.org-1:vdiiVgocg6WeJrODIqdprZRUrhi1JzhBnXv7aWI6+F0="
     ];
@@ -41,9 +41,9 @@
     };
   };
 
-  outputs = inputs@{ flake-parts, ... }:
-    flake-parts.lib.mkFlake { inherit inputs; } {
-      systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ];
+  outputs = inputs @ {flake-parts, ...}:
+    flake-parts.lib.mkFlake {inherit inputs;} {
+      systems = ["x86_64-linux" "aarch64-linux" "aarch64-darwin"];
 
       imports = [
         ./shells/base.nix
@@ -52,18 +52,29 @@
         ./checks
       ];
 
-      perSystem = { self', system, lib, ... }: {
+      perSystem = {
+        self',
+        system,
+        lib,
+        pkgs,
+        ...
+      }: {
         # Apply the version-of-record overlay (private R packages, R overrides,
         # system pins) to this repo's own pkgs, so the base shell and resolver
         # see it. positron-bin is unfree; allow only it.
         _module.args.pkgs = import inputs.nixpkgs {
           inherit system;
-          overlays = [ (import ./overlays { inherit inputs; }) ];
-          config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) [ "positron-bin" ];
+          overlays = [(import ./overlays {inherit inputs;})];
+          config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) ["positron-bin"];
         };
 
         # The repo's own dev environment is the base shell.
         devShells.default = self'.devShells.base;
+
+        # `nix fmt`. CI runs `nix fmt -- --check .`, so formatting never has to
+        # be a review topic; the formatter comes from our own nixpkgs pin, so
+        # CI and a dev shell agree on the version.
+        formatter = pkgs.alejandra;
       };
 
       flake = {
@@ -72,7 +83,7 @@
 
         # Version-of-record overlays (system pins + R overrides + private R
         # packages). Consumed by dev shells and deployments alike.
-        overlays.default = import ./overlays { inherit inputs; };
+        overlays.default = import ./overlays {inherit inputs;};
 
         templates = {
           default = {

@@ -1,8 +1,7 @@
 # Geospatial development: GDAL/GEOS/PROJ toolchain for R packages like sf,
 # terra, and stars (the packages themselves are nix-built and carry their own
 # native deps).
-pkgs:
-{
+pkgs: {
   packages = with pkgs; [
     gdal
     geos

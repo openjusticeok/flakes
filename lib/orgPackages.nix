@@ -7,8 +7,11 @@
 #
 # Adding a package: add the input in flake.nix, add its name here, then run
 # `nix flake update <name>`.
-{ inputs, system, lib }:
-let
+{
+  inputs,
+  system,
+  lib,
+}: let
   names = [
     "ojodb"
     "ojoregex"
@@ -24,12 +27,12 @@ let
 
   packages = lib.genAttrs names (name: inputs.${name}.packages.${system}.${name});
 in
-if missing != [ ] then
-  throw ''
-    opi: no flake input(s) for org package(s): ${lib.concatStringsSep ", " missing}.
-    The consuming flake's lock is stale; re-lock the opi input:
-      nix flake lock --update-input opi
-    (or `nix flake update`).
-  ''
-else
-  { inherit names packages; }
+  if missing != []
+  then
+    throw ''
+      opi: no flake input(s) for org package(s): ${lib.concatStringsSep ", " missing}.
+      The consuming flake's lock is stale; re-lock the opi input:
+        nix flake lock --update-input opi
+      (or `nix flake update`).
+    ''
+  else {inherit names packages;}

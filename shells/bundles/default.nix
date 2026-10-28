@@ -9,8 +9,7 @@
 #
 # Add a bundle by creating `<name>.nix` here (a `pkgs: { ... }` function) and
 # listing it below.
-pkgs:
-{
+pkgs: {
   # Bundles may carry Nix packages and/or R packages (`rPackages`). The
   # org-standard R set is not a bundle: it lives in the base shell
   # (shells/base.nix) so it's present in every opi shell.

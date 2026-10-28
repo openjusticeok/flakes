@@ -9,11 +9,16 @@
     flake-parts.follows = "opi/flake-parts";
   };
 
-  outputs = inputs@{ opi, nixpkgs, flake-parts, ... }:
-    flake-parts.lib.mkFlake { inherit inputs; } {
+  outputs = inputs @ {
+    opi,
+    nixpkgs,
+    flake-parts,
+    ...
+  }:
+    flake-parts.lib.mkFlake {inherit inputs;} {
       systems = nixpkgs.lib.systems.flakeExposed;
 
-      imports = [ opi.flakeModules.default ];
+      imports = [opi.flakeModules.default];
 
       # `base` is auto-wired from the opi input. Each opi.shells entry becomes
       # devShells.<name>. Adjacent shells are independent: each is base + its
@@ -23,7 +28,7 @@
       # project-specific extras — see examples/project. Defining an
       # opi.bundles entry here is the exception: this project has two shells
       # that share one bundle.
-      perSystem = { pkgs, ... }: {
+      perSystem = {pkgs, ...}: {
         opi.bundles.analysis = {
           packages = with pkgs; [
             duckdb
@@ -40,11 +45,11 @@
         '';
 
         opi.shells.analysis = {
-          bundles = [ "analysis" ];
-          packages = [ pkgs.gnuplot ];
+          bundles = ["analysis"];
+          packages = [pkgs.gnuplot];
         };
 
-        opi.shells.shiny.bundles = [ "shiny" ];
+        opi.shells.shiny.bundles = ["shiny"];
       };
     };
 }
