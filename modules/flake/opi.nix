@@ -91,6 +91,29 @@ in {
           };
         };
       };
+
+      # Each shell entry, with its bundles resolved once and reused by both
+      # materializations below.
+      shellsWithBundles =
+        lib.mapAttrs (
+          shellName: cfg: let
+            appliedBundles =
+              map (
+                bundleName:
+                  config.opi.bundles.${bundleName}
+                  or (throw "opi.shells.${shellName}.bundles: unknown bundle '${bundleName}'")
+              )
+              cfg.bundles;
+          in {
+            inherit shellName appliedBundles;
+            rPackages = lib.concatMap (b: b.rPackages) appliedBundles ++ cfg.rPackages;
+            env = lib.mergeAttrsList (map (b: b.env) appliedBundles ++ [cfg.env]);
+            inherit (cfg) name packages shellHook;
+            bundlePackages = lib.concatMap (b: b.packages) appliedBundles;
+            bundleShellHook = lib.concatMapStrings (b: b.shellHook) appliedBundles;
+          }
+        )
+        config.opi.shells;
     in {
       _file = ./opi.nix;
 
@@ -144,29 +167,30 @@ in {
         default = {};
       };
 
-      config.devShells =
-        lib.mapAttrs (
-          shellName: cfg: let
-            appliedBundles =
-              map (
-                bundleName:
-                  config.opi.bundles.${bundleName}
-                  or (throw "opi.shells.${shellName}.bundles: unknown bundle '${bundleName}'")
-              )
-              cfg.bundles;
-          in
-            mkOpiShell {
-              inherit pkgs lib;
-              inherit (cfg) name;
+      config.devShells = lib.mapAttrs (_: e:
+        mkOpiShell {
+          inherit pkgs lib;
+          inherit (e) name rPackages env;
+          packages = e.bundlePackages ++ e.packages;
+          shellHook = e.bundleShellHook + e.shellHook;
+        })
+      shellsWithBundles;
 
-              # Bundles first, then the shell's own opts.
-              rPackages = lib.concatMap (b: b.rPackages) appliedBundles ++ cfg.rPackages;
-              packages = lib.concatMap (b: b.packages) appliedBundles ++ cfg.packages;
-              env = lib.mergeAttrsList (map (b: b.env) appliedBundles ++ [cfg.env]);
-              shellHook = lib.concatMapStrings (b: b.shellHook) appliedBundles + cfg.shellHook;
-            }
+      # Materialization 2: what a process runs in — the runtime closure CI can
+      # `nix run` and an image can copy. Same declaration, no dev-only weight:
+      # bundle `packages` are deliberately absent here, because a nix-built R
+      # package carries its own native deps and a bundle's CLIs are for humans
+      # (ARCHITECTURE §5).
+      config.packages =
+        lib.mapAttrs' (
+          shellName: e:
+            lib.nameValuePair "${shellName}-env"
+            (import ../../lib/mkRenv.nix {
+              inherit pkgs lib;
+              inherit (e) rPackages env;
+            }).package
         )
-        config.opi.shells;
+        shellsWithBundles;
     }
   );
 }

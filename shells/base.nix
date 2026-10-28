@@ -15,5 +15,15 @@
       inherit pkgs lib;
       name = "opi-base-shell";
     };
+
+    # The same org environment, materialized for a process instead of a human:
+    # R + the standard R set + the shell env, with no Positron, compilers or CLI
+    # tools (they were never inputs).
+    # `nix run .#base-env -- -e '…'` (ARCHITECTURE §3, §10).
+    packages.base-env =
+      (import ../lib/mkRenv.nix {
+        inherit pkgs lib;
+        rPackages = (import ../lib/baseEnvironment.nix {inherit pkgs;}).rPackages;
+      }).package;
   };
 }
