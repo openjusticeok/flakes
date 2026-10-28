@@ -41,9 +41,14 @@
     };
   };
 
-  outputs = inputs @ {flake-parts, ...}:
+  outputs = inputs @ {flake-parts, ...}: let
+    # The platforms opi supports. Exported as `opi.lib.systems` so a consumer
+    # pins the same list instead of copying it (or, worse, using
+    # `flakeExposed` and failing on a host opi does not build for).
+    systems = ["x86_64-linux" "aarch64-linux" "aarch64-darwin"];
+  in
     flake-parts.lib.mkFlake {inherit inputs;} {
-      systems = ["x86_64-linux" "aarch64-linux" "aarch64-darwin"];
+      inherit systems;
 
       imports = [
         ./shells/base.nix
@@ -79,14 +84,17 @@
         # packages). Consumed by dev shells and deployments alike.
         overlays.default = import ./overlays {inherit inputs;};
 
+        # For consumers that want to say `systems = opi.lib.systems;` and to see
+        # what every opi shell already provides before adding to it.
+        lib = {
+          inherit systems;
+          standardRPackages = (import ./lib/packageNames.nix).standard;
+        };
+
         templates = {
           default = {
             description = "opi project shell";
             path = ./templates/default;
-          };
-          census = {
-            description = "opi census project shell";
-            path = ./templates/census;
           };
           gis = {
             description = "opi gis project shell";

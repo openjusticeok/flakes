@@ -9,16 +9,18 @@
 
   outputs = inputs @ {
     opi,
-    nixpkgs,
     flake-parts,
     ...
   }:
     flake-parts.lib.mkFlake {inherit inputs;} {
-      systems = nixpkgs.lib.systems.flakeExposed;
+      # The platforms opi supports, straight from the opi flake.
+      inherit (opi.lib) systems;
 
       imports = [opi.flakeModules.default];
 
-      # Full GIS stack on the geo bundle's gdal/geos/proj toolchain.
+      # Full GIS stack on the geo bundle's gdal/geos/proj toolchain. targets,
+      # rmarkdown, knitr and the tidyverse core are already in every opi shell
+      # (opi.lib.standardRPackages), so only the GIS extras are listed here.
       perSystem = {...}: {
         opi.shells.default = {
           bundles = ["geo"];
@@ -30,18 +32,14 @@
             "sfdep"
             "sfnetworks"
             "freestiler"
-            # census geometry (kept from the rv-era template)
+            # census geometry
             "tidycensus"
             "tigris"
             "crsuggest"
             # browser maps
             "mapgl"
-            # columnar geo data (duckdb is in the base shell)
+            # columnar geo data (duckdb is in the org environment)
             "geoarrow"
-            # reporting
-            "targets"
-            "rmarkdown"
-            "knitr"
           ];
         };
       };

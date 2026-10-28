@@ -11,18 +11,18 @@
 
   outputs = inputs @ {
     opi,
-    nixpkgs,
     flake-parts,
     ...
   }:
     flake-parts.lib.mkFlake {inherit inputs;} {
-      systems = nixpkgs.lib.systems.flakeExposed;
+      # The platforms opi supports, straight from the opi flake.
+      inherit (opi.lib) systems;
 
       imports = [opi.flakeModules.default];
 
-      # `base` is auto-wired from the opi input. Each opi.shells entry becomes
-      # devShells.<name>. Adjacent shells are independent: each is base + its
-      # own opts, sharing nothing beyond base.
+      # Each opi.shells entry becomes devShells.<name>. Adjacent shells are
+      # independent: each is the org environment + its own opts, sharing nothing
+      # beyond that.
       #
       # Typical projects reference shipped bundles (geo, shiny, ...) and add
       # project-specific extras — see examples/project. Defining an
