@@ -84,7 +84,8 @@ are in `ARCHITECTURE.md` §6. They govern the artifacts this file's phases build
 - 1355 hand-written `.nix` lines (excl. locks), 11 lock nodes, base shell with 57
   `buildInputs` (34 system + the R set). Up from 1146 before alejandra expanded
   the tree; S0 added checks/fixtures/script, S1 moved the shell contract into
-  `lib/`, S2 collapsed the option surface.
+  `lib/`, S2 collapsed the option surface. (P1 adds `nix2container` as a 12th
+  lock node, so S4's target becomes 8.)
 - **The module path is covered.** `nix flake check` builds six eval-time checks
   (resolver ×3, org lock, shell contract, one-arrow, project compose), and
   `scripts/check-consumers` evaluates 10 consumer cases (2 examples, 3 templates,
@@ -369,7 +370,7 @@ style already lives.
 | shell-composition mechanisms | 4 | **1** | 1 |
 | bundle files | 4 | **1** | 1 |
 | templates / examples | 4 / 3 | **3 / 2** | 3 / 2 |
-| lock nodes | 11 | 11 | 7 |
+| lock nodes | 11 | 11 | 8 (`nix2container` lands in P1; S4 then cuts the four private `nixpkgs` duplicates) |
 | files deleted | — | `lib/mkPackageShell.nix`, `lib/orgPackageNames.nix`, `checks/fixtures/bad-base`, 3 bundle files, `templates/census`, `examples/base-direct` | 2 overlay files, `scripts/develop` (not `scripts/check-consumers`, added by S0) |
 
 S1 was line-neutral by design: the mechanism it deleted (~70 lines of guards,

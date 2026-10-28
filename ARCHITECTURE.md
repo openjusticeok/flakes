@@ -1,9 +1,17 @@
 # Architecture: environments, capabilities, and deployables
 
-Status: **settled (v2)**. The axes (§2), declaration (§3), deploy contract (§4),
-roles (§5) and invariants (§6) are decided and buildable against. The image/CI
-half of the model is not implemented yet — §9 gives the order. Open items are
-reduced to triggers (§8).
+Status: **settled (v3)**. The axes (§2), declaration (§3), deploy contract (§4),
+roles (§5) and invariants (§6) are decided. The image/CI half is now implemented
+(`packages.<name>-env`, `lib/mkImage.nix`, `lib/pushImage.nix`); what remains is
+wiring a real pilot (§9, §10). Open items are reduced to triggers (§8).
+
+v3 changes from v2: the runtime closure and the image/push builders are shipped,
+not proposed (§7, §9) — which moved the CI question from "can it be cheaper" to
+"does the artifact say what it is" (§4: the reference implementation's
+`config` keys were silently wrong). The provenance label is the flake **source**
+hash rather than the lockfile hash, because reading a consumer's `flake.lock` at
+eval time throws when that lock is untracked (fixtures); the source hash covers
+the lock, so invariant 11 still holds.
 
 v2 changes from v1: the env/secret contract lives in the CLI config file and the
 flake reads it (inv 13); prod deploys are **gated by CI** but provenance is
@@ -140,7 +148,7 @@ decided by the output, never by a second package list.
 | Materialization | Audience | Contents | Status |
 |---|---|---|---|
 | `devShells.<name>` | a human at a keyboard | everything: R + R packages + build + IDE + reporting + declared capability CLIs | **shipped** (`lib/mkOpiShell.nix`) |
-| `packages.<name>-image` | Cloud Run / container host | R + R packages + **the shell's `env`** + declared image extras (assets, entrypoint); **environment-agnostic** | **not built** (§4, §7) |
+| `packages.<name>-image` | Cloud Run / container host | R + R packages + **the shell's `env`** + declared image extras (assets, entrypoint); **environment-agnostic** | **built** (`lib/mkImage.nix`; pilot pending) |
 | CI | `r-ci.yml`, `targets-ci.yml` | **= dev minus the IDE** — not a third shape | **decided, no mechanism needed yet** |
 | `packages.<name>-env` | a CI job, or an image's contents | the runtime closure alone: R + R packages + `env`. No IDE, no compilers, no `ops` CLIs, no docker needed | **shipped** (`lib/mkRenv.nix`) |
 | nothing | a scratch or docs-only repo | — | allowed |
@@ -212,6 +220,45 @@ the rest of the shell's `env` in `config.env`, an entrypoint dispatching on `arg
 `plumber::pr_run()`), plus declared assets. No R project does this today;
 `eviction-addresses`, `justice-link`, `ocjr-report-rural-fines-and-fees` consume
 the flake for a **dev shell only** and deploy by hand.
+
+### The one thing the reference implementation gets wrong
+
+`oscn-rs` proved the *flow*, and its `config` is silently broken. nix2container
+writes `config` **verbatim** into `config.json`, so its
+`config = { entrypoint = …; env = …; }` produces dead lowercase keys: the image
+has no `Entrypoint` and no `Env`. Nothing fails at build time; it fails when a
+container starts with no command. The fix is capitalised OCI field names, and
+`opi/mkImage` owns it so no project can repeat the mistake — with a check
+(`opi-image-config`) that asserts the capitalised keys are present *and* the
+lowercase ones are absent.
+
+So: a build/push/pin pattern copied from a working deployment is not necessarily
+correct, and the only guard is asserting the shipped artifact. That is also why
+the checks read `config.json` rather than the inputs that produced it.
+
+### What a project writes
+
+Naming a shell is what ties the image to the runtime closure, so the R side is one
+line and the project is left with the two things it actually owns — the entrypoint
+and its infra:
+
+```nix
+perSystem = {...}: {
+  opi.shells.default.rPackages = ["shiny" "ojoutils"];
+
+  opi.images.dashboard = {
+    shell = "default"; # contents + env = that shell's runtime closure
+    repository = "us-central1-docker.pkg.dev/PROJECT/REPO";
+    entrypoint = ["/bin/sh" "-c" ''exec Rscript -e 'shiny::runApp(host = "0.0.0.0", port = as.integer(Sys.getenv("PORT")))' ''];
+    requiredEnv = ["DATABASE_URL"];
+    port = 8080;
+    migrateJob = "dashboard-migrate"; # only if it has one
+  };
+};
+# nix build .#dashboard-image      → the OCI image
+# nix run   .#dashboard-push       → push, resolve digest, pin tfvars
+# nix run   .#dashboard-push -- --dry-run
+```
 
 ### What the flake owns vs what a project keeps
 
@@ -337,8 +384,8 @@ scopes:
 | Piece | Scope | Why it exists |
 |---|---|---|
 | `mkRenv { pkgs, rPackages, env }` | **R-specific, high value** | the runtime closure: R + resolved R packages + the org `env`. This is where opi's whole value concentrates (resolution rules, invariant 10). |
-| `mkImage { name, contents, env, requiredEnv, entrypoint, assets, provenance }` | **thin, generic** | org conventions over `nix2container`: entrypoint path, labels carrying invariant 11's provenance, non-root user, and an entrypoint that enforces `requiredEnv` (inv 13). Usable by a Rust artifact too. |
-| `pushImage` (an `apps.*` entry) | **org-wide, the valuable bit** | build → `copyToRegistry` → resolve digest → pin `image_name` in tfvars, with `--dry-run`. Bespoke per-repo today, and the step that fails silently (tag dedupe, digest lag, ordering). |
+| `mkImage { name, contents, env, requiredEnv, entrypoint, cmd, tag, port, user, revision, source }` | **thin, generic** | org conventions over `nix2container`: OCI-cased config keys, provenance labels, non-root user, and an entrypoint that enforces `requiredEnv` (inv 13). `contents` is the runtime closure plus any code-adjacent assets; where they land inside the image is the project's call. Usable by a Rust artifact too. | **shipped** (`lib/mkImage.nix`, `opi.images.<name>` → `<name>-image`) |
+| `pushImage` (an `apps.*` entry) | **org-wide, the valuable bit** | build → `copyToRegistry` → resolve digest → pin `image_name` in tfvars, with `--dry-run`. Bespoke per-repo today, and the step that fails silently (tag dedupe, digest lag, ordering). | **shipped** (`lib/pushImage.nix`, `opi.images.<name>` → `<name>-push`) |
 
 ### Conventions opi ships (decided)
 
@@ -347,7 +394,7 @@ scopes:
 | Entrypoint | **Per project, documented contract.** opi does not ship a dispatcher: bind `0.0.0.0:$PORT`, read env, export OTel, handle `SIGTERM`. ~20 lines per repo, and unusual apps are never blocked by a framework. |
 | Secrets | **Secret Manager volumes.** Cloud Run mounts secret *N* as a file/env; the image never fetches credentials. The `requiredEnv` names and the mounted secret names are both declared, so `tofu` can compare them at plan time. |
 | Retention | **Keep every closure ever deployed, for now.** Cheap and safest; revisit when retention actually costs something — rebuild-from-lock (inv 11) is the fallback that makes shrinking possible later. |
-| Signing | **Deferred** (inv 14). Labels carry revision + lock hash; the CI-only gate already exists. |
+| Signing | **Deferred** (inv 14). Labels carry the git revision and the flake source hash (which covers `flake.lock`); the CI-only gate already exists. |
 
 Split rationale: the *contract* (§4) is ecosystem-agnostic and belongs to the org;
 the *contents* are ecosystem-specific (`mkRenv` for R, `crane` for Rust); the
@@ -417,8 +464,8 @@ of packages. The roles/taxonomy idea is dead (§5).
 | Step | Work | Why in this order |
 |---|---|---|
 | 1 ✅ | **`packages.<name>-env`** — `lib/mkRenv.nix` + `lib/rShellEnv.nix` | Done and measured (§2c). Consumed by CI now, by images next |
-| 2 | **`mkImage` + `pushImage`** | The wrapper and the dangerous step (digest lag, tag dedupe, pin ordering); pilot the Shiny dashboard |
-| 3 | **`requiredEnv` + Secret Manager mounts in the pilot's tofu** | Where inv 13 first touches real infrastructure |
+| 2 ✅ | **`mkImage` + `pushImage`** — `lib/mkImage.nix`, `lib/pushImage.nix`, `opi.images.<name>` → `<name>-image` + `<name>-push` | Done. Checks assert the shipped manifest (OCI-cased keys, labels, non-root) and the guards that keep a pin from silently not happening |
+| 3 | **`requiredEnv` + Secret Manager mounts in the pilot's tofu** | Where inv 13 first touches real infrastructure. The *runtime* half already ships in `mkImage` (exit 78 at boot); this step is the plan-time half — tofu comparing declared names with what it mounts |
 | 4 | *(deferred)* signing, retention tightening | Triggers in §8 |
 
 No classification pass, no package tagging, and no bundle surgery — all three were

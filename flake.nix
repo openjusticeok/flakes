@@ -19,6 +19,15 @@
     flake-parts.url = "github:hercules-ci/flake-parts";
     flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs";
 
+    # OCI images without a Containerfile. `nixpkgs.follows` is not optional:
+    # nix2container pins its own nixpkgs (for the Go tool and skopeo), and
+    # following ours keeps one package set per consumer — the same reason F1
+    # was worth fixing for shells (PLAN.md).
+    nix2container = {
+      url = "github:nlewo/nix2container";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # Private package flakes. Each is self-contained and pins nixpkgs, which
     # follows ours here so the whole closure shares one nixpkgs pin.
     ojodb = {
