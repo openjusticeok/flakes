@@ -11,7 +11,11 @@
   # themselves reach pkgs.rPackages through overlays/default.nix, so naming them
   # does not require the org's flake inputs (a consuming project does not have
   # them as inputs of its own).
-  orgPackageNames = import ./orgPackageNames.nix;
+  # The org's R package names (standard set + private packages), by CRAN name.
+  # Input-free on purpose: the derivations reach pkgs.rPackages through
+  # overlays/default.nix, so naming them does not require the org's flake inputs
+  # (a consuming project does not have them as inputs of its own).
+  names = import ./packageNames.nix;
 
   # Quarto 1.9.x emits pandoc 3.8's `syntax-highlighting` defaults field,
   # but nixpkgs' pandoc predates that rename (nixpkgs#461018), so renders
@@ -77,34 +81,7 @@ in {
   # CRAN names: mkOpiShell resolves them against pkgs.rPackages and puts them on
   # R_LIBS_SITE via R's setup hook. Org packages are wired into pkgs.rPackages
   # by overlays/default.nix, so they are just more names here.
-  rPackages =
-    [
-      # tidyverse core
-      "dplyr"
-      "tidyr"
-      "purrr"
-      "stringr"
-      "tibble"
-      "readr"
-      "lubridate"
-      "forcats"
-      "ggplot2"
-      # ergonomics, pipelines, reporting
-      "fs"
-      "glue"
-      "here"
-      "targets"
-      "qs2"
-      "rmarkdown"
-      "knitr"
-      # data I/O + quality
-      "readxl"
-      "googledrive"
-      "pointblank"
-      # data platform
-      "arrow"
-    ]
-    ++ orgPackageNames;
+  rPackages = names.standard ++ names.org;
 
   # Build/runtime tooling available to analysts. Nix builds R packages in their
   # own closures, so these are for interactive/ad-hoc work, not for building

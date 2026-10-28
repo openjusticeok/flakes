@@ -2,19 +2,19 @@
 #
 # Each is a self-contained flake consumed as an input in flake.nix (declared
 # there with `inputs.nixpkgs.follows = "nixpkgs"`). The *names* live in
-# lib/orgPackageNames.nix (input-free, so a consumer shell can name them without
+# lib/packageNames.nix (input-free, so a consumer shell can name them without
 # the org's inputs); this file pairs them with their derivations and owns the
 # stale-lock guard. The private-package overlay, the standard R set, and the
 # per-package dev shells all read from here, so they cannot drift apart.
 #
 # Adding a package: add the input in flake.nix, add its name to
-# lib/orgPackageNames.nix, then run `nix flake update <name>`.
+# lib/packageNames.nix, then run `nix flake update <name>`.
 {
   inputs,
   system,
   lib,
 }: let
-  names = import ./orgPackageNames.nix;
+  names = (import ./packageNames.nix).org;
 
   # An input declared here but absent from the lock is the signature of a stale
   # lock in the consuming flake (the opi lock is what carries these inputs).
