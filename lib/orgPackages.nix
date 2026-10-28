@@ -1,23 +1,20 @@
 # The org's private R packages.
 #
 # Each is a self-contained flake consumed as an input in flake.nix (declared
-# there with `inputs.nixpkgs.follows = "nixpkgs"`). This file is the single
-# source of truth for *which* ones exist, so the private-package overlay, the
-# base shell's standard set, and the per-package dev shells cannot drift apart.
+# there with `inputs.nixpkgs.follows = "nixpkgs"`). The *names* live in
+# lib/orgPackageNames.nix (input-free, so a consumer shell can name them without
+# the org's inputs); this file pairs them with their derivations and owns the
+# stale-lock guard. The private-package overlay, the standard R set, and the
+# per-package dev shells all read from here, so they cannot drift apart.
 #
-# Adding a package: add the input in flake.nix, add its name here, then run
-# `nix flake update <name>`.
+# Adding a package: add the input in flake.nix, add its name to
+# lib/orgPackageNames.nix, then run `nix flake update <name>`.
 {
   inputs,
   system,
   lib,
 }: let
-  names = [
-    "ojodb"
-    "ojoregex"
-    "ojothemes"
-    "ojoutils"
-  ];
+  names = import ./orgPackageNames.nix;
 
   # An input declared here but absent from the lock is the signature of a stale
   # lock in the consuming flake (the opi lock is what carries these inputs).

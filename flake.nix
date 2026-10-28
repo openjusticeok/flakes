@@ -54,19 +54,13 @@
 
       perSystem = {
         self',
-        system,
-        lib,
         pkgs,
         ...
       }: {
-        # Apply the version-of-record overlay (private R packages, R overrides,
-        # system pins) to this repo's own pkgs, so the base shell and resolver
-        # see it. positron-bin is unfree; allow only it.
-        _module.args.pkgs = import inputs.nixpkgs {
-          inherit system;
-          overlays = [(import ./overlays {inherit inputs;})];
-          config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) ["positron-bin"];
-        };
+        # `pkgs` comes from the module (modules/flake/opi.nix), which instantiates
+        # it with the version-of-record overlay and the positron-bin unfree
+        # exemption. There is no second definition here: the repo's own shells
+        # and a consumer's shells are built from the same package set.
 
         # The repo's own dev environment is the base shell.
         devShells.default = self'.devShells.base;

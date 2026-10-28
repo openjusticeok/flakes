@@ -1,10 +1,14 @@
 # Dev shells for the org's private package repos: devShells.<pkg>-dev.
 #
-# Each is the opi base shell + the package itself (whose propagatedBuildInputs
-# bring its runtime deps onto R_LIBS_SITE), so working on ojodb/ojoutils/... uses
-# the same R, toolchain, and environment as every opi project instead of a
-# per-repo copy of the base shell. The package repos cannot depend on opi (flake
-# input cycle); see lib/mkPackageShell.nix.
+# Each is the org environment plus the package itself (whose
+# propagatedBuildInputs bring its runtime deps onto R_LIBS_SITE), so working on
+# ojodb/ojoutils/... uses the same R, toolchain, and environment as every opi
+# project instead of a per-repo copy of the base shell.
+#
+# The package repos cannot depend on opi (`opi -> <pkg> -> opi` is a flake input
+# cycle), so the org repo — which already has every package as an input — owns
+# the supported dev environment. Each package repo keeps only a minimal
+# standalone `nix develop` shell for working on it outside opi.
 #
 # Usage: nix develop .#ojodb-dev
 {inputs, ...}: {
@@ -12,23 +16,19 @@
     pkgs,
     lib,
     system,
-    self',
     ...
-  }: let
-    base = self'.devShells.base;
-
-    org = import ../lib/orgPackages.nix {inherit inputs system lib;};
-
-    mkPackageShell = import ../lib/mkPackageShell.nix;
-  in {
+  }: {
     devShells =
       lib.mapAttrs' (
         pkgName: package:
-          lib.nameValuePair "${pkgName}-dev" (mkPackageShell {
-            inherit pkgs lib base package;
-            name = "opi-${pkgName}-dev";
-          })
+          lib.nameValuePair "${pkgName}-dev" (
+            import ../lib/mkOpiShell.nix {
+              inherit pkgs lib;
+              name = "opi-${pkgName}-dev";
+              packages = [package];
+            }
+          )
       )
-      org.packages;
+      (import ../lib/orgPackages.nix {inherit inputs system lib;}).packages;
   };
 }
