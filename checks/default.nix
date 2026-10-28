@@ -45,9 +45,15 @@
     # `packages.base-env` is. Its claim is that dev-only weight cannot be in it
     # (invariant 8 by construction), so the checks assert absence rather than a
     # shorter list.
-    baseEnv = import ../lib/mkRenv.nix {
+    baseEnv = import ../lib/runtimeEnv.nix {inherit pkgs lib;};
+
+    # A shell with extras, composed as the module composes one. This is the case
+    # that was broken: the module passed only the shell's own rPackages to
+    # mkRenv, so a project's <name>-env had no `targets` and no `dplyr` while its
+    # dev shell had both.
+    projectEnv = import ../lib/runtimeEnv.nix {
       inherit pkgs lib;
-      rPackages = (import ../lib/baseEnvironment.nix {inherit pkgs;}).rPackages;
+      rPackages = ["sf"];
     };
 
     inEnv = needle: builtins.any (p: lib.hasInfix needle (p.name or "")) baseEnv.paths;
@@ -247,6 +253,18 @@
           touch $out
         '';
 
+      # A shell's runtime closure is the org set *plus* the shell's extras. When
+      # it was only the extras, nothing failed until CI ran tar_validate() in the
+      # artifact — so assert it here, where the composition happens.
+      opi-env-includes-org-set =
+        check "opi-env-includes-org-set"
+        (
+          builtins.any (p: lib.hasPrefix "r-targets-" (p.name or "")) projectEnv.resolved
+          && builtins.any (p: lib.hasPrefix "r-sf-" (p.name or "")) projectEnv.resolved
+          && builtins.length projectEnv.resolved > builtins.length baseEnv.resolved
+        )
+        "a shell's runtime closure lost the org standard R set (or its own extras)";
+
       # The runtime closure carries nothing a process does not need. This is
       # invariant 8 as an assertion rather than a promise: if someone adds a
       # dev-only package to the runtime path, this fails by name.
@@ -277,9 +295,20 @@
           && baseEnv.env.R_ENVIRON_USER == "/dev/null"
           && baseEnv.env.R_MAKEVARS_USER == "/dev/null"
           && lib.hasPrefix "/nix/store/" (toString (baseEnv.env.FONTCONFIG_FILE or null))
-          && builtins.length (lib.splitString ":" baseEnv.R_LIBS_SITE) == builtins.length baseEnv.resolved
+          # R_LIBS_SITE comes from R's setup hook at build time, so it is a
+          # derivation rather than a string here.
+          && lib.isDerivation baseEnv.rLibsSite
         )
-        "the runtime closure's env diverged from the shell's, or R_LIBS_SITE does not list every resolved package";
+        "the runtime closure's env diverged from the shell's";
+
+      # The check that would have caught the two bugs this pair of files exists
+      # for: the org set missing from a project env, and transitive R
+      # dependencies missing from R_LIBS_SITE (targets -> R6). It is the one check
+      # here that builds, because "the packages load" is not an eval-time fact.
+      opi-env-loads-transitive-deps = pkgs.runCommandLocal "check-opi-env-loads-transitive-deps" {} ''
+        ${baseEnv.package}/bin/Rscript -e 'library(targets); stopifnot(requireNamespace("R6", quietly = TRUE)); cat("ok\n")'
+        touch $out
+      '';
 
       # The shell contract: R_HOME, the three immutability pins, the fontconfig
       # path, and the QUARTO_R export. Losing any of these is silent otherwise —

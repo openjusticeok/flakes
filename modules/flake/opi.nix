@@ -134,7 +134,10 @@ in {
                   shellsWithBundles.${cfg.shell}
                   or (throw "opi.images.${imageName}: unknown shell '${cfg.shell}' (declared in opi.shells)");
               in
-                import ../../lib/mkRenv.nix {
+                # lib/runtimeEnv.nix, not mkRenv: the image must carry the org
+                # standard set *and* the shell's extras, exactly as the dev
+                # shell does.
+                import ../../lib/runtimeEnv.nix {
                   inherit pkgs lib;
                   inherit (entry) rPackages env;
                 };
@@ -344,7 +347,10 @@ in {
         lib.mapAttrs' (
           shellName: e:
             lib.nameValuePair "${shellName}-env"
-            (import ../../lib/mkRenv.nix {
+            # runtimeEnv, not mkRenv: the org standard set is part of what a
+            # shell promises, so it belongs in the artifact too (see
+            # lib/runtimeEnv.nix for the bug that taught us this).
+            (import ../../lib/runtimeEnv.nix {
               inherit pkgs lib;
               inherit (e) rPackages env;
             }).package
