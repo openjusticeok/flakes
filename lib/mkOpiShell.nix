@@ -33,28 +33,11 @@
 
   rp = import ./rPackages.nix {inherit pkgs lib;};
 
-  fontsConf = pkgs.makeFontsConf {fontDirectories = [pkgs.source-sans];};
-
-  # Env vars exported to every opi shell, base and project alike. Adding one
-  # here propagates everywhere; projects override through
-  # `opi.shells.<name>.env`, never in a home directory.
-  shellEnv = {
-    R_HOME = "${pkgs.R}/lib/R";
-    FONTCONFIG_FILE = fontsConf;
-
-    # Strict immutability: point R's user library at a read-only empty store
-    # path so ad-hoc install.packages() cannot persist. Packages come from the
-    # shell's rPackages (via R's setup hook -> R_LIBS_SITE).
-    R_LIBS_USER = "${pkgs.emptyDirectory}";
-
-    # R also sources machine-wide user config: ~/.Renviron (which can reset
-    # R_LIBS_*/R_PROFILE and so defeat the immutability above) and ~/.R/Makevars
-    # (which injects CFLAGS/LDFLAGS/BLAS into every local source compile, e.g.
-    # devtools::load_all() on a package with compiled code). Both pin away so a
-    # shell behaves identically on every machine.
-    R_ENVIRON_USER = "/dev/null";
-    R_MAKEVARS_USER = "/dev/null";
-  };
+  # Env vars exported to every opi shell, base and project alike. The runtime
+  # closure (`lib/mkRenv.nix`) reads the same function, so a shell and an image
+  # cannot disagree (invariant 10). Adding one here propagates everywhere;
+  # projects override through `opi.shells.<name>.env`, never in a home directory.
+  shellEnv = import ./rShellEnv.nix {inherit pkgs;};
 
   readinessHook = ''
     echo "opi shell ready: ${name}"

@@ -40,6 +40,24 @@
       )
       baseShell.buildInputs;
 
+    # The runtime closure for the org environment, composed exactly as
+    # `packages.base-env` is. Its claim is that dev-only weight cannot be in it
+    # (invariant 8 by construction), so the checks assert absence rather than a
+    # shorter list.
+    baseEnv = import ../lib/mkRenv.nix {
+      inherit pkgs lib;
+      rPackages = (import ../lib/baseEnvironment.nix {inherit pkgs;}).rPackages;
+    };
+
+    inEnv = needle: builtins.any (p: lib.hasInfix needle (p.name or "")) baseEnv.paths;
+
+    envArrowCount = builtins.length (
+      builtins.filter (
+        p: builtins.match "r-arrow-.*" (p.name or "") != null
+      )
+      baseEnv.paths
+    );
+
     # A project-shaped shell, composed the way the module composes one (extras
     # on top of the org environment, same pkgs). S1's acceptance criterion is
     # that this path carries exactly one `arrow` — the patched one — and still
@@ -100,6 +118,40 @@
         check "opi-orgpackages-stale-lock-throws"
         (!(builtins.tryEval (lib.isAttrs orgPackagesWithoutInputs)).success)
         "orgPackages accepted inputs that do not carry the org package flakes";
+
+      # The runtime closure carries nothing a process does not need. This is
+      # invariant 8 as an assertion rather than a promise: if someone adds a
+      # dev-only package to the runtime path, this fails by name.
+      opi-env-runtime-only =
+        check "opi-env-runtime-only"
+        (
+          !(inEnv "positron")
+          && !(inEnv "gcc")
+          && !(inEnv "cmake")
+          && !(inEnv "cargo")
+          && !(inEnv "rustc")
+          && !(inEnv "quarto")
+          && !(inEnv "postgresql")
+          && !(inEnv "duckdb")
+          && !(inEnv "google-cloud-sdk")
+          && envArrowCount == 1
+        )
+        "the runtime closure picked up dev-only weight (Positron, a compiler, a CLI tool, or a second arrow) — it should be R + rPackages + env only";
+
+      # Same env as the shell (invariant 10) plus an explicit R_LIBS_SITE, since
+      # there is no R setup hook to compute one for a process.
+      opi-env-contract =
+        check "opi-env-contract"
+        (
+          baseEnv.env.R_HOME
+          == "${pkgs.R}/lib/R"
+          && baseEnv.env.R_LIBS_USER == "${pkgs.emptyDirectory}"
+          && baseEnv.env.R_ENVIRON_USER == "/dev/null"
+          && baseEnv.env.R_MAKEVARS_USER == "/dev/null"
+          && lib.hasPrefix "/nix/store/" (toString (baseEnv.env.FONTCONFIG_FILE or null))
+          && builtins.length (lib.splitString ":" baseEnv.R_LIBS_SITE) == builtins.length baseEnv.resolved
+        )
+        "the runtime closure's env diverged from the shell's, or R_LIBS_SITE does not list every resolved package";
 
       # The shell contract: R_HOME, the three immutability pins, the fontconfig
       # path, and the QUARTO_R export. Losing any of these is silent otherwise —
