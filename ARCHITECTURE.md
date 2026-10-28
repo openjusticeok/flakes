@@ -478,13 +478,38 @@ Bundling does **not** make CI cheaper, because project CI enters the dev shell:
 | Workflow | Runner command | Needs | Does not need |
 |---|---|---|---|
 | `r-ci` | `nix develop --command air format --check .` / `jarl check .` | `air`, `jarl` | R, Positron, DB CLIs |
-| `targets-ci` | `nix develop --command … targets::tar_make()` | R + packages = `packages.<name>-env` | Positron, `gcloud`, compilers |
+| `targets-ci` | `nix build .#<shell>-env` → `bin/Rscript -e …` | R + packages = `packages.<name>-env` | Positron, `gcloud`, compilers, the dev shell itself |
 
 So the lever is **CI not entering the dev shell**, which is exactly what
 `packages.<name>-env` enables. Two consequences worth acting on separately:
 
-- `targets-ci.yml` still runs `rv sync` / `rv run` (lines 59–68) — the shared
-  workflow never migrated off `rv`, so it works only for projects pinned to the
-  pre-`rv`-removal flake. That is a bug in `openjusticeok/actions`, not here.
+- ~~`targets-ci.yml` still runs `rv sync` / `rv run`~~ — **done**: the shared
+  workflow now builds `.#<shell_name>-env` and runs `tar_validate()`/`tar_make()`
+  through its `bin/Rscript`. The `rv` cache steps and `rv sync` went with `rv`
+  (they failed with "command not found" in four repositories); `r_version` went
+  too, since R's version is the flake's business.
 - `r-ci` needs only `air` + `jarl`; a lint-only environment (no R at all) would
-  make it seconds rather than minutes.
+  make it seconds rather than minutes. Still open.
+
+### What moving CI onto the artifact exposed
+
+CI is the first consumer that *uses* the runtime closure rather than describing
+it, and it immediately found two bugs — both invisible to `nix flake check`
+(eval-time facts only) and to `nix develop` (which uses R's setup hook and so
+never saw the hand-built list):
+
+1. **The org set was missing.** The module passed only a shell's own `rPackages`
+   to `mkRenv`, so a project's `<name>-env` contained no `targets`, no `dplyr` —
+   nothing the org promises — while the same project's dev shell had everything.
+   `lib/runtimeEnv.nix` is now the single composition (org set + extras), used by
+   the base shell, `<name>-env`, and images alike.
+2. **Transitive R dependencies were missing.** `R_LIBS_SITE` was built as one
+   entry per *direct* package; `targets` then could not load `R6`, because a
+   propagated dependency is not a direct one. The value now comes from R's own
+   setup hook (`addToSearchPath R_LIBS_SITE "$1/library"` over the propagated
+   closure), baked into the wrapper.
+
+The lesson generalises to the whole model: an artifact that is *composed
+separately* from the shell will drift from it, and the drift is silent until
+something loads a package. Hence `opi-env-loads-transitive-deps` — the one check
+that builds, because "the packages load" is not an eval-time fact.

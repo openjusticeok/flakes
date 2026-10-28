@@ -20,10 +20,6 @@
     # R + the standard R set + the shell env, with no Positron, compilers or CLI
     # tools (they were never inputs).
     # `nix run .#base-env -- -e '…'` (ARCHITECTURE §3, §10).
-    packages.base-env =
-      (import ../lib/mkRenv.nix {
-        inherit pkgs lib;
-        rPackages = (import ../lib/baseEnvironment.nix {inherit pkgs;}).rPackages;
-      }).package;
+    packages.base-env = (import ../lib/runtimeEnv.nix {inherit pkgs lib;}).package;
   };
 }

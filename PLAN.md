@@ -387,9 +387,9 @@ shell became one, and two package sets became one.
 | Item | Status |
 |---|---|
 | P0 internal refactor | **done** on `feat/all-in` (rv gone, one pin, module + overlays + 4 org packages). Deviations: `lib/rv-private.nix` never written (`r-private` was inlined into `overlays/default.nix`); `lib/mkRLibrary.nix` deliberately not written — redundant with the setup-hook mechanism, re-home under `packages/` only if a deploy artifact needs one library dir |
-| P1 runtime closure + images | **runtime closure done and measured** (`lib/mkRenv.nix`, `lib/rShellEnv.nix`, `packages.<name>-env`): 3,475 MiB / 577 paths vs 10,898 MiB / 858 for the dev shell — see `ARCHITECTURE.md` §2c. **Next:** `mkImage` + `pushImage`, then `requiredEnv` + Secret Manager mounts in the pilot (a Shiny dashboard on Cloud Run) |
+| P1 runtime closure + images | **done**: runtime closure (`lib/mkRenv.nix`, `lib/rShellEnv.nix`, `lib/runtimeEnv.nix`, `packages.<name>-env`), images (`lib/mkImage.nix`, `lib/pushImage.nix`, `opi.images.<name>` → `<name>-image` + `<name>-push`). Measured 3,475 MiB / 578 paths vs 10,898 MiB / 858 for the dev shell — see `ARCHITECTURE.md` §2c. **Next:** the pilot — a Shiny dashboard on Cloud Run with `requiredEnv` + Secret Manager mounts |
 | P2 Cachix + bump automation | missing: `nixConfig` advertises only `rstats-on-nix`; no org cache, no push step, no `lockFileMaintenance` — the `r-daily` pin never advances on its own (REVIEW R1) |
-| P3 consumer migration | **table below**; the sweep itself is unstarted. Migrate when the API settles (after S3) so consumers edit their flake once |
+| P3 consumer migration | **table below**; the sweep itself is unstarted. Migrate when the API settles (after S3) so consumers edit their flake once. The four repos that call `actions/.../targets-ci.yml@v1` need it soonest: `demo-main-lockdown` and `demo-opi-project-template` still use `opi-flakes.base.devShells` (gone), `opi-project-template` and `youth-justice-listening-circles` still import `flakeModules.opi` (renamed `default`) and pass `layers` (gone). All four need a `flake.lock` bump, and the workflow change reaches them only when the `v1` tag moves |
 | P4 rename `flakes` → `nix` | not started; last, post-review/merge |
 | Docs | none: no README/DEVELOPMENT (also absent on `main`). Issues #35/#36 (adding a package mid-session; `install.packages()` soft error) are docs answers, not code |
 | `x86_64-darwin` | unsupported; S2 makes the failure message honest |
@@ -411,6 +411,7 @@ spellings fail at the import line or as an unknown option, which is the intent.
 | `bundles = [ "quarto" ]` | `packages = [ pkgs.chromium ]` (the bundle was unused and is gone) |
 | per-project `rproject.toml` / `rv.lock` / `.Rprofile` / `rv/` | delete; declare R packages in `opi.shells.<n>.rPackages` |
 | `install.packages()` inside a session | edit `rPackages` and re-enter the shell (immutable by design) |
+| `nix develop --command rv sync` / `rv run -e …` in CI | `nix build .#<shell>-env`, then `<path>/bin/Rscript -e …` (the `targets-ci.yml` workflow does this; `shell_name` input, default `default`) |
 
 ## Bump process (monthly)
 
