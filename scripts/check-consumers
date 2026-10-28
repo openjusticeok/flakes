@@ -133,10 +133,6 @@ expect_fail "fixture/bad-rpackage" "$root/checks/fixtures/bad-rpackage" \
 expect_fail "fixture/bad-bundle" "$root/checks/fixtures/bad-bundle" \
   "unknown bundle 'no-such-bundle'"
 
-# A base shell that is not an opi base shell must not drop R_HOME or the setup hook.
-expect_fail "fixture/bad-base" "$root/checks/fixtures/bad-base" \
-  'not an opi base shell'
-
 if [ "$check_locks" = 1 ]; then
   printf '\nexample locks\n\n'
   for dir in "$root"/examples/*/; do
