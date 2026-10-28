@@ -7,11 +7,16 @@
     flake-parts.follows = "opi/flake-parts";
   };
 
-  outputs = inputs@{ opi, nixpkgs, flake-parts, ... }:
-    flake-parts.lib.mkFlake { inherit inputs; } {
+  outputs = inputs @ {
+    opi,
+    nixpkgs,
+    flake-parts,
+    ...
+  }:
+    flake-parts.lib.mkFlake {inherit inputs;} {
       systems = nixpkgs.lib.systems.flakeExposed;
 
-      imports = [ opi.flakeModules.default ];
+      imports = [opi.flakeModules.default];
 
       # Each opi.shells.<name> entry becomes devShells.<name>, wrapping the opi
       # base shell automatically. List R packages by CRAN name; they resolve
@@ -22,9 +27,9 @@
       #     env.R_MAX_VSIZE = "32Gb";
       #     shellHook = ''echo ready'';
       #   };
-      perSystem = { ... }: {
+      perSystem = {...}: {
         opi.shells.default = {
-          rPackages = [ "dplyr" "ggplot2" ];
+          rPackages = ["dplyr" "ggplot2"];
         };
       };
     };

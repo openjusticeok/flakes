@@ -7,17 +7,22 @@
     flake-parts.follows = "opi/flake-parts";
   };
 
-  outputs = inputs@{ opi, nixpkgs, flake-parts, ... }:
-    flake-parts.lib.mkFlake { inherit inputs; } {
+  outputs = inputs @ {
+    opi,
+    nixpkgs,
+    flake-parts,
+    ...
+  }:
+    flake-parts.lib.mkFlake {inherit inputs;} {
       systems = nixpkgs.lib.systems.flakeExposed;
 
-      imports = [ opi.flakeModules.default ];
+      imports = [opi.flakeModules.default];
 
       # Shiny development: the shiny bundle adds chromium + nodejs for
       # shinytest2 headless testing.
-      perSystem = { ... }: {
+      perSystem = {...}: {
         opi.shells.default = {
-          bundles = [ "shiny" ];
+          bundles = ["shiny"];
           rPackages = [
             "shiny"
             "shinytest2"

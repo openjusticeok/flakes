@@ -1,2 +1,7 @@
 .direnv/
 result
+
+# Fixture flakes are evaluated with --no-write-lock-file (scripts/check-consumers).
+# A lock here would pin a stale snapshot of this tree and silently stop testing
+# the working tree.
+checks/fixtures/*/flake.lock

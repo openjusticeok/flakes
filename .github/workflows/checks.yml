@@ -36,3 +36,31 @@ jobs:
 
       - name: nix flake check
         run: nix flake check
+
+  # The module, the templates, and the examples are only reachable from *another*
+  # flake, so `nix flake check` cannot see them (a sandboxed build cannot copy the
+  # path inputs a nested `nix eval` needs). One Linux runner is enough: this job
+  # proves the consumer-facing flakes evaluate, not that every platform builds.
+  consumers:
+    name: consumers (examples, templates, fixtures)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Formatting
+        run: nix fmt -- --check .
+
+      # `--locks` re-locks the examples and fails if that produced a diff: a
+      # stale path-input lock pins an old snapshot of this tree, so a green
+      # example would otherwise prove the wrong thing.
+      - name: Consumers evaluate
+        run: ./scripts/check-consumers --locks

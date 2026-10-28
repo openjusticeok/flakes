@@ -7,23 +7,28 @@
 # input cycle); see lib/mkPackageShell.nix.
 #
 # Usage: nix develop .#ojodb-dev
-{ inputs, ... }:
-{
-  perSystem = { pkgs, lib, system, self', ... }:
-    let
-      base = self'.devShells.base;
+{inputs, ...}: {
+  perSystem = {
+    pkgs,
+    lib,
+    system,
+    self',
+    ...
+  }: let
+    base = self'.devShells.base;
 
-      org = import ../lib/orgPackages.nix { inherit inputs system lib; };
+    org = import ../lib/orgPackages.nix {inherit inputs system lib;};
 
-      mkPackageShell = import ../lib/mkPackageShell.nix;
-    in
-    {
-      devShells = lib.mapAttrs' (
+    mkPackageShell = import ../lib/mkPackageShell.nix;
+  in {
+    devShells =
+      lib.mapAttrs' (
         pkgName: package:
-        lib.nameValuePair "${pkgName}-dev" (mkPackageShell {
-          inherit pkgs lib base package;
-          name = "opi-${pkgName}-dev";
-        })
-      ) org.packages;
-    };
+          lib.nameValuePair "${pkgName}-dev" (mkPackageShell {
+            inherit pkgs lib base package;
+            name = "opi-${pkgName}-dev";
+          })
+      )
+      org.packages;
+  };
 }
