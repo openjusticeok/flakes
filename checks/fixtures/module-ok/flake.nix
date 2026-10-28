@@ -49,6 +49,22 @@
           bundles = ["shiny"];
           rPackages = ["shiny"];
         };
+
+        # An image, declared the way the pilot will: `shell` makes it the runtime
+        # closure of that shell entry, so the image and the shell cannot disagree
+        # about R (invariant 10). Reaching `nix2container` here proves the module
+        # resolves it from opi's inputs when the consumer does not pin it.
+        opi.images.probe = {
+          shell = "shiny";
+          repository = "us-central1-docker.pkg.dev/fixture/repo";
+          entrypoint = ["/bin/bash" "-c" "echo fixture"];
+          env.FIXTURE_IMAGE = "1";
+          requiredEnv = ["FIXTURE_IMAGE"];
+          port = 8080;
+          migrateJob = "probe-migrate";
+          region = "us-central1";
+          gcpProject = "fixture";
+        };
       };
     };
 }

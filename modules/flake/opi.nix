@@ -114,6 +114,77 @@ in {
           }
         )
         config.opi.shells;
+
+      # Images: one per divergence in content, never per differing arguments
+      # (ARCHITECTURE §4). Provenance labels come from the consuming flake's own
+      # `self`, so an image records which revision and which lockfile built it
+      # (inv 11) without the project wiring anything.
+      opiImages =
+        lib.mapAttrs (
+          imageName: cfg: let
+            # Naming a shell makes the image that shell's runtime closure: the
+            # dev shell and the image cannot disagree about R, the R packages or
+            # the env (invariant 10), because both are materializations of one
+            # declaration (ARCHITECTURE §3).
+            renv =
+              if cfg.shell == null
+              then null
+              else let
+                entry =
+                  shellsWithBundles.${cfg.shell}
+                  or (throw "opi.images.${imageName}: unknown shell '${cfg.shell}' (declared in opi.shells)");
+              in
+                import ../../lib/mkRenv.nix {
+                  inherit pkgs lib;
+                  inherit (entry) rPackages env;
+                };
+          in {
+            image = import ../../lib/mkImage.nix {
+              inherit pkgs lib;
+              # The consumer's input if they pin their own, else opi's.
+              nix2container =
+                (
+                  inputs.nix2container or inputs.opi.inputs.nix2container
+                or (throw "opi.images.${imageName}: the `opi` flake input must be named `opi`, or add a `nix2container` input")
+                ).packages.${
+                  system
+                }.nix2container;
+              name = "${cfg.repository}/${imageName}";
+              contents =
+                (
+                  if renv == null
+                  then []
+                  else renv.paths
+                )
+                ++ cfg.contents;
+              env =
+                (
+                  if renv == null
+                  then {}
+                  else
+                    renv.env
+                    // {
+                      # `Rscript`/`R` have to resolve inside the container: the
+                      # entrypoint is a shell command and an image has no
+                      # profile to put the runtime on PATH. The wrapper carries
+                      # the env, so this also keeps R_LIBS_SITE on the process
+                      # even when a platform injects env of its own.
+                      PATH = lib.concatStringsSep ":" [
+                        "${renv.package}/bin"
+                        "/usr/local/bin"
+                        "/usr/bin"
+                        "/bin"
+                      ];
+                    }
+                )
+                // cfg.env;
+              inherit (cfg) entrypoint requiredEnv cmd tag port;
+              revision = inputs.self.rev or null;
+              source = baseNameOf (toString inputs.self);
+            };
+          }
+        )
+        config.opi.images;
     in {
       _file = ./opi.nix;
 
@@ -167,6 +238,94 @@ in {
         default = {};
       };
 
+      # An image is the same idea as a shell, materialized for a container. A
+      # project declares it once here (not in a Containerfile — ARCHITECTURE §4)
+      # and gets two outputs: <name>-image, and <name>-push, the deploy step.
+      options.opi.images = lib.mkOption {
+        type = lib.types.attrsOf (
+          lib.types.submodule {
+            options = {
+              repository = lib.mkOption {
+                type = lib.types.str;
+                description = "Artifact Registry path without the image name (e.g. us-central1-docker.pkg.dev/PROJECT/REPO). The image is <repository>/<name>.";
+              };
+
+              shell = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                default = null;
+                description = "An opi.shells entry whose runtime closure fills `contents` and `env`: same R, same R packages, same env as that shell (invariant 10). Leave null for a non-R image.";
+              };
+
+              contents = lib.mkOption {
+                type = lib.types.listOf (lib.types.either lib.types.package lib.types.path);
+                default = [];
+                description = "Store paths laid at the image root. With `shell`, the runtime closure's `paths` are added automatically; use this for code-adjacent assets (a Shiny app directory), never for data.";
+              };
+
+              entrypoint = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                description = "Command to run. opi does not dispatch (ARCHITECTURE §7): bind 0.0.0.0:$PORT, read env, export OTel, handle SIGTERM.";
+              };
+
+              env = lib.mkOption {
+                type = lib.types.attrsOf lib.types.str;
+                default = {};
+                description = "config.env. For an R project this is the runtime closure's `env` (the same values the dev shell has, invariant 10).";
+              };
+
+              requiredEnv = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [];
+                description = "Env var names that must be non-empty at boot (inv 13). The entrypoint exits 78 rather than failing later; the list is also a label so tofu and ops can compare it with what is actually mounted.";
+              };
+
+              cmd = lib.mkOption {
+                type = lib.types.nullOr (lib.types.listOf lib.types.str);
+                default = null;
+                description = "Default arguments. Several workloads sharing one image differ here, not in `contents` (ARCHITECTURE §4).";
+              };
+
+              tag = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                default = null;
+                description = "Image tag; null uses nix output hash, which cannot be stale. Deploys pin a digest regardless.";
+              };
+
+              port = lib.mkOption {
+                type = lib.types.nullOr lib.types.int;
+                default = null;
+                description = "Port to expose (Cloud Run sets $PORT).";
+              };
+
+              tfvars = lib.mkOption {
+                type = lib.types.str;
+                default = "infra/tofu/terraform.tfvars";
+                description = "File <name>-push pins the digest into, relative to the repository root.";
+              };
+
+              migrateJob = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                default = null;
+                description = "Cloud Run job that must run after `tofu apply` (the ordering trap, ARCHITECTURE §4).";
+              };
+
+              gcpProject = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                default = null;
+                description = "GCP project, for the closing instructions.";
+              };
+
+              region = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                default = null;
+                description = "GCP region, for the closing instructions.";
+              };
+            };
+          }
+        );
+        default = {};
+      };
+
       config.devShells = lib.mapAttrs (_: e:
         mkOpiShell {
           inherit pkgs lib;
@@ -190,7 +349,24 @@ in {
               inherit (e) rPackages env;
             }).package
         )
-        shellsWithBundles;
+        shellsWithBundles
+        # Materialization 3: images, declared in opi.images.
+        // lib.mapAttrs' (imageName: v: lib.nameValuePair "${imageName}-image" v.image) opiImages;
+
+      # The deploy step: push, resolve the digest, pin it in tfvars, and say what
+      # to run next (lib/pushImage.nix).
+      config.apps =
+        lib.mapAttrs' (
+          imageName: v:
+            lib.nameValuePair "${imageName}-push" (import ../../lib/pushImage.nix {
+              inherit pkgs lib;
+              image = v.image;
+              flakeAttr = "${imageName}-image";
+              inherit (config.opi.images.${imageName}) tfvars migrateJob region;
+              project = config.opi.images.${imageName}.gcpProject;
+            })
+        )
+        opiImages;
     }
   );
 }
