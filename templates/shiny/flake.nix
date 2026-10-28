@@ -9,12 +9,12 @@
 
   outputs = inputs @ {
     opi,
-    nixpkgs,
     flake-parts,
     ...
   }:
     flake-parts.lib.mkFlake {inherit inputs;} {
-      systems = nixpkgs.lib.systems.flakeExposed;
+      # The platforms opi supports, straight from the opi flake.
+      inherit (opi.lib) systems;
 
       imports = [opi.flakeModules.default];
 

@@ -1,6 +1,7 @@
 # The opi base shell: the org environment with nothing added. Exposed as
-# devShells.<system>.base, which is what `nix develop .#base` and a project that
-# wants R without a module entry uses (examples/base-direct).
+# devShells.<system>.base, which is what `nix develop .#base` runs. A project that
+# wants the org environment without a module entry uses
+# `opi.devShells.<system>.base` directly.
 #
 # Every other opi shell is this plus extras — lib/mkOpiShell.nix is the single
 # composition path, so this file is deliberately just a call.
