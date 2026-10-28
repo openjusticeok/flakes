@@ -58,15 +58,12 @@ in {
       ...
     }: let
       # Predefined bundles shipped with opi (shells/bundles/), exposed as
-      # opi.bundles defaults. env values are mkDefault so projects can override
-      # without conflicting definitions.
-      shippedBundles = lib.mapAttrs (
-        _: entry:
-          lib.recursiveUpdate entry {
-            env = lib.mapAttrs (_: lib.mkDefault) (entry.env or {});
-          }
-      ) (import ../../shells/bundles pkgs);
+      # opi.bundles defaults. Their env values are mkDefault in that file, so a
+      # project can override them without a conflicting definition.
+      shippedBundles = import ../../shells/bundles {inherit pkgs lib;};
 
+      # The fields a bundle and a shell share. Defined once: a shell is this plus
+      # a name and a bundle list, so the two cannot drift (S2).
       entrySubmodule = {
         options = {
           packages = lib.mkOption {
@@ -78,19 +75,19 @@ in {
           rPackages = lib.mkOption {
             type = lib.types.listOf lib.types.str;
             default = [];
-            description = "CRAN package names provided by this bundle (resolved against pkgs.rPackages).";
+            description = "CRAN package names (resolved against pkgs.rPackages; dots map to underscores, unknown names fail with a request-to-add message).";
           };
 
           env = lib.mkOption {
             type = lib.types.attrsOf lib.types.str;
             default = {};
-            description = "Environment variables (values must be strings). Overrides same-named org env vars.";
+            description = "Environment variables (values must be strings). Applied in order — bundles first, then the shell — so later entries win.";
           };
 
           shellHook = lib.mkOption {
             type = lib.types.lines;
             default = "";
-            description = "Shell hook lines, run after the org environment's built-in setup.";
+            description = "Shell hook lines, run after the org environment's setup (bundles first, then the shell's own).";
           };
         };
       };
@@ -111,77 +108,38 @@ in {
       options.opi.bundles = lib.mkOption {
         type = lib.types.attrsOf (lib.types.submodule entrySubmodule);
         default = {};
-        description = "Named bundles of packages/env/shellHook that shells include via opi.shells.<name>.bundles. Predefined ones (geo, shiny, quarto) ship with opi.";
+        description = "Named bundles of packages/env/shellHook that shells include via opi.shells.<name>.bundles. Predefined ones (geo, shiny) ship with opi.";
       };
 
-      # Shipped bundles first, then the deprecated `opi.layers` aliases. mkMerge
-      # keeps same-named entries merged as submodules instead of replacing them.
-      config.opi.bundles = lib.mkMerge [shippedBundles config.opi.layers];
-
-      # Deprecated: `opi.layers` was renamed to `opi.bundles` (delete in S2).
-      options.opi.layers = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.submodule entrySubmodule);
-        default = {};
-        description = "Deprecated alias for opi.bundles.";
-      };
+      # Shipped bundles are ordinary definitions: a project that defines
+      # `opi.bundles.<name>` merges with them (same-named entries merge as
+      # submodules, so a project can extend geo rather than replace it).
+      config.opi.bundles = shippedBundles;
 
       options.opi.shells = lib.mkOption {
         type = lib.types.attrsOf (
-          lib.types.submodule (
-            {
-              name,
-              config,
-              ...
-            }: {
-              options = {
-                name = lib.mkOption {
-                  type = lib.types.str;
-                  default = "opi-${name}-shell";
-                  description = "Name of the resulting devShell.";
-                };
+          lib.types.submodule {
+            imports = [
+              entrySubmodule
+              # `name` is the attribute name (attrsOf passes it as a module arg),
+              # so it must be an argument of this module, not a lexical value.
+              ({name, ...}: {
+                options = {
+                  name = lib.mkOption {
+                    type = lib.types.str;
+                    default = "opi-${name}-shell";
+                    description = "Name of the resulting devShell.";
+                  };
 
-                bundles = lib.mkOption {
-                  type = lib.types.listOf lib.types.str;
-                  default = [];
-                  description = "opi.bundles entries applied to this shell, in list order, before the shell's own opts.";
+                  bundles = lib.mkOption {
+                    type = lib.types.listOf lib.types.str;
+                    default = [];
+                    description = "opi.bundles entries applied to this shell, in list order, before the shell's own opts.";
+                  };
                 };
-
-                layers = lib.mkOption {
-                  type = lib.types.listOf lib.types.str;
-                  default = [];
-                  description = "Deprecated alias for bundles.";
-                };
-
-                rPackages = lib.mkOption {
-                  type = lib.types.listOf lib.types.str;
-                  default = [];
-                  description = "CRAN package names resolved against pkgs.rPackages (dots map to underscores). Unknown names fail with a request-to-add message.";
-                };
-
-                packages = lib.mkOption {
-                  type = lib.types.listOf lib.types.package;
-                  default = [];
-                  description = "Extra Nix packages added on top of the org environment and bundles.";
-                };
-
-                env = lib.mkOption {
-                  type = lib.types.attrsOf lib.types.str;
-                  default = {};
-                  description = "Extra environment variables (values must be strings). Overrides same-named org and bundle vars.";
-                };
-
-                shellHook = lib.mkOption {
-                  type = lib.types.lines;
-                  default = "";
-                  description = "Extra shell hook lines, run after the org environment's and bundles' setup.";
-                };
-              };
-
-              # Deprecated: `opi.shells.<name>.layers` was renamed to `bundles`
-              # (delete in S2). List options concatenate, so both spellings work.
-              config.bundles = config.layers;
-            }
-          )
+              })
+            ];
+          }
         );
         default = {};
       };
