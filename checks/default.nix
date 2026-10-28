@@ -18,6 +18,7 @@
   perSystem = {
     pkgs,
     lib,
+    config,
     ...
   }: let
     rp = import ../lib/rPackages.nix {inherit pkgs lib;};
@@ -26,6 +27,36 @@
       if cond
       then pkgs.runCommand "check-${name}" {} "touch $out"
       else throw "check-${name}: ${msg}";
+
+    # Every opi shell is built by lib/mkOpiShell.nix, so asserting the contract
+    # on the base shell asserts it for project shells and `<pkg>-dev` shells too
+    # (scripts/check-consumers proves the composition actually reaches a project).
+    # mkShell lifts `env` entries to attributes, so this is readable at eval time.
+    baseShell = config.devShells.base;
+
+    arrowInBase =
+      builtins.filter (
+        p: builtins.match "r-arrow-.*" (p.name or "") != null
+      )
+      baseShell.buildInputs;
+
+    # A project-shaped shell, composed the way the module composes one (extras
+    # on top of the org environment, same pkgs). S1's acceptance criterion is
+    # that this path carries exactly one `arrow` — the patched one — and still
+    # has the org env and the project's own overrides.
+    projectShell = import ../lib/mkOpiShell.nix {
+      inherit pkgs lib;
+      name = "check-opi-project-shell";
+      rPackages = ["sf" "data.table"];
+      packages = [pkgs.jq];
+      env.FIXTURE_PROJECT = "1";
+    };
+
+    arrowInProject =
+      builtins.filter (
+        p: builtins.match "r-arrow-.*" (p.name or "") != null
+      )
+      projectShell.buildInputs;
 
     # A lock missing an org package is the signature of a stale opi input in a
     # consuming flake; lib/orgPackages.nix must throw rather than ship a base
@@ -69,6 +100,49 @@
         check "opi-orgpackages-stale-lock-throws"
         (!(builtins.tryEval (lib.isAttrs orgPackagesWithoutInputs)).success)
         "orgPackages accepted inputs that do not carry the org package flakes";
+
+      # The shell contract: R_HOME, the three immutability pins, the fontconfig
+      # path, and the QUARTO_R export. Losing any of these is silent otherwise —
+      # the shell still opens, R just behaves differently than documented.
+      opi-shell-contract =
+        check "opi-shell-contract"
+        (
+          baseShell.R_HOME
+          == "${pkgs.R}/lib/R"
+          && baseShell.R_LIBS_USER == "${pkgs.emptyDirectory}"
+          && baseShell.R_ENVIRON_USER == "/dev/null"
+          && baseShell.R_MAKEVARS_USER == "/dev/null"
+          # FONTCONFIG_FILE is the makeFontsConf derivation; mkShell keeps it as
+          # an attrset, so compare its store path rather than its type.
+          && lib.hasPrefix "/nix/store/" (toString (baseShell.FONTCONFIG_FILE or null))
+          && lib.hasInfix "QUARTO_R" baseShell.shellHook
+        )
+        "the base shell lost part of its contract (R_HOME, the immutability pins, FONTCONFIG_FILE, or the QUARTO_R export)";
+
+      # One `arrow`, from the package set the shells are built from. Zero means
+      # the overlay stopped injecting it; more than one is the mixed-pkgs bug
+      # (F1) coming back — a project would get an unpatched arrow on R_LIBS_SITE.
+      opi-shell-one-arrow =
+        check "opi-shell-one-arrow"
+        (
+          builtins.length arrowInBase
+          == 1
+          && builtins.any (p: p.drvPath == pkgs.rPackages.arrow.drvPath) baseShell.buildInputs
+        )
+        "the base shell carries zero or several `arrow` derivations — a second package set is leaking in";
+
+      # The project path (org environment + extras) keeps the same properties:
+      # one arrow, the org env intact, the project's own env applied on top.
+      opi-shell-project-compose =
+        check "opi-shell-project-compose"
+        (
+          builtins.length arrowInProject
+          == 1
+          && builtins.any (p: p.drvPath == pkgs.rPackages.arrow.drvPath) projectShell.buildInputs
+          && projectShell.R_HOME == "${pkgs.R}/lib/R"
+          && projectShell.FIXTURE_PROJECT == "1"
+        )
+        "a project shell did not compose as org environment + extras (missing arrow, second package set, lost R_HOME, or an env override was dropped)";
     };
   };
 }
