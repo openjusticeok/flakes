@@ -47,10 +47,6 @@
     echo "arf: $(arf --version)"
     echo "jarl: $(jarl --version)"
     echo "quarto: $(quarto --version)"
-
-    # Pin quarto's R explicitly (quarto's rWrapper override is null, so it
-    # would otherwise discover R from PATH).
-    export QUARTO_R="$(which R)"
   '';
 in
   pkgs.mkShell {

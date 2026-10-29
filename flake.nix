@@ -94,10 +94,14 @@
         overlays.default = import ./overlays {inherit inputs;};
 
         # For consumers that want to say `systems = opi.lib.systems;` and to see
-        # what every opi shell already provides before adding to it.
+        # what every opi shell already provides before adding to it. Two halves,
+        # because "what I already have" is `standard ++ org` (baseEnvironment
+        # concatenates them); exporting only the standard set would under-count a
+        # project's starting point by the private packages.
         lib = {
           inherit systems;
           standardRPackages = (import ./lib/packageNames.nix).standard;
+          orgRPackages = (import ./lib/packageNames.nix).org;
         };
 
         templates = {

@@ -18,6 +18,12 @@
   # closure via R_LIBS_SITE computed directly).
   R_LIBS_USER = "${pkgs.emptyDirectory}";
 
+  # Quarto discovers R from PATH unless told otherwise (nixpkgs' quarto has no
+  # rWrapper override). Pinning it as a value keeps it true in a shell *and* in a
+  # container; this used to be `export QUARTO_R="$(which R)"` in mkOpiShell's
+  # shellHook, which an image never runs — so invariant 10 was false for it.
+  QUARTO_R = "${pkgs.R}/bin/R";
+
   # R also sources machine-wide user config: ~/.Renviron (which can reset
   # R_LIBS_*/R_PROFILE and so defeat the immutability above) and ~/.R/Makevars
   # (which injects CFLAGS/LDFLAGS/BLAS into every local source compile, e.g.
