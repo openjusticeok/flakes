@@ -81,15 +81,19 @@ are in `ARCHITECTURE.md` §6. They govern the artifacts this file's phases build
 - **One package set and one composition path.** The module instantiates `pkgs`
   (overlaid) and `lib/mkOpiShell.nix` builds every shell from it — the repo's
   base shell, project shells, and `<pkg>-dev` shells alike.
-- 1355 hand-written `.nix` lines (excl. locks), 11 lock nodes, base shell with 57
+- 2182 hand-written `.nix` lines (excl. locks), 12 lock nodes, base shell with 57
   `buildInputs` (34 system + the R set). Up from 1146 before alejandra expanded
   the tree; S0 added checks/fixtures/script, S1 moved the shell contract into
-  `lib/`, S2 collapsed the option surface. (P1 adds `nix2container` as a 12th
-  lock node, so S4's target becomes 8.)
-- **The module path is covered.** `nix flake check` builds six eval-time checks
-  (resolver ×3, org lock, shell contract, one-arrow, project compose), and
-  `scripts/check-consumers` evaluates 10 consumer cases (2 examples, 3 templates,
-  one good and two bad module fixtures) plus example lock freshness — run by CI.
+  `lib/`, S2 collapsed the option surface, P1 added the runtime closure and the
+  image/push builders (`lib/{mkRenv,runtimeEnv,mkImage,pushImage}.nix` — ~800
+  lines of new capability, which is why the S2 line count no longer describes
+  today). `nix2container` is the 12th lock node, so S4's target becomes 8.
+- **The module path is covered.** `nix flake check` builds 14 checks on
+  x86_64-linux (13 elsewhere: `opi-env-loads-transitive-deps` is the one that
+  builds the R closure and is Linux-scoped on purpose), and
+  `scripts/check-consumers` evaluates 8 consumer cases (2 examples, 3 templates,
+  one good and two bad module fixtures) plus packages/images, and example lock
+  freshness — run by CI.
   Before S0 there was one `tryEval` check and no consumer evaluation at all.
 
 ## Where the complexity is
@@ -361,7 +365,7 @@ style already lives.
 
 | Metric | S0 baseline | Now (after S2) | Target |
 |---|---|---|---|
-| hand-written `.nix` lines | 1442 (was 1146 before alejandra) | 1355 | ~1050 |
+| hand-written `.nix` lines | 1442 (was 1146 before alejandra) | 1355 at S2 (2182 today: P1 added the runtime/image builders) | ~1050 (superseded — the S-phases shrank composition, P1 added capability) |
 | `modules/flake/opi.nix` | 231 | 172 (~135 + header) | ~130 |
 | `shells/base.nix` | 223 | 18 | — |
 | `lib/mkOpiShell.nix` + `lib/baseEnvironment.nix` | — | 262 | — |

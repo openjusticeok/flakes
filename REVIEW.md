@@ -259,3 +259,85 @@ did not match the branch and are worth closing as code, not prose:
 | "one nixpkgs pin, bumped monthly on green" | one pin ✓, no bump automation (R1) | see §4 |
 | "`opi.shells` layered on base, shared sets via `opi.bundles`, R via `R_LIBS_SITE`" | matches exactly | — |
 | repo rename `flakes` → `nix`, org `openjusticeok` → `okpolicy` in flight | branch still `openjusticeok/flakes` | P4, and **do not rename as a side effect** |
+
+---
+
+# Review round 2 — after S2, the runtime closure, images, and CI
+
+Round 1 above covers `feat/all-in` before the phase work. This round reviews the
+tree as committed at `099b486`: S0–S2, `packages.<name>-env`, `mkImage`/
+`pushImage`, and the `targets-ci` change. Method: read every file under `lib/`,
+`shells/`, `modules/`, `checks/`, `flake.nix`; ran the four gates; re-measured
+the claims in `PLAN.md`/`ARCHITECTURE.md`; ran the commands each invariant
+implies. Nothing here is inferred from the docs.
+
+## 11. Must fix
+
+**Status after review feedback: F1 and F2 are fixed; F3 is downgraded to a wording
+fix (done) because step 3 is the implementation. Corrections to this section are
+kept inline rather than rewritten, so the review's errors stay visible.**
+
+| # | Finding | Evidence | Fix |
+|---|---|---|---|
+| F1 ✅ | **`nix flake check` built the whole R runtime closure on all three platforms** — while `checks/default.nix`'s header said it "builds nothing" and that R-package builds "belong behind the Cachix push". *(Correction: my claim that "P2 does not exist" was wrong — the `okpolicy` cache exists and `r-ci.yml`/`targets-ci.yml` both use it. What is missing is narrower: this repo's own `checks.yml` has no `cachix-action`, and `flake.nix`'s `nixConfig` advertises only `rstats-on-nix`.)* | `nix eval .#checks.aarch64-darwin` included `opi-env-loads-transitive-deps` | **Done**: the check is now `lib.optionalAttrs (system == "x86_64-linux")`, so it runs 14 checks on x86_64-linux and 13 elsewhere; the header states the policy and why. Cachix subscription stays a pre-finalization task |
+| F2 ✅ | **Invariant 10 was false for `QUARTO_R`.** It was exported from `mkOpiShell`'s shellHook (`export QUARTO_R="$(which R)"`), which an image never runs; `lib/rShellEnv.nix` — the shared env — did not contain it, and invariant 10 listed it as inherited | `grep -rn QUARTO_R lib shells modules` → only mkOpiShell + the check | **Done**: `QUARTO_R = "${pkgs.R}/bin/R"` now lives in `rShellEnv`, so shells and images share it by construction; `opi-shell-contract` asserts the env attribute and `opi-env-contract` asserts the image's, instead of grepping a hook |
+| F3 ✅ (doc) | Two invariants are written as shipped but are not implemented: inv 13's declaration half (the flake reads the CLI's config file) and inv 14's CI-only gate. The v3 status said the image/CI half is implemented | module options `requiredEnv`; no image workflow | **Done as wording**: the status paragraph now names both as *half*-enforced and points at §9 step 3. Implementing them is step 3, not a review fix |
+
+## 12. Doc vs reality drift
+
+| # | Claim | Reality | Note |
+|---|---|---|---|
+| F4 ✅ | PLAN: "1355 hand-written `.nix` lines", "`nix flake check` → 6 checks" | 2,182 `.nix` lines (+179 shell); **14** checks on x86_64-linux, 13 elsewhere | **Done**: current-state bullets and the targets table now say both, and mark the old figure as the S2 snapshot |
+| F5 ✅ | ARCHITECTURE inv 11: provenance is "source revision + **lock hash**" | shipped label is `org.openjusticeok.source` = flake *source* hash (covers the lock) | **Done**: inv 11 now says source hash and why (untracked consumer locks) |
+| F6 ✅ | `flake.nix`: `opi.lib.standardRPackages` is "what every opi shell already provides" | every shell provides `names.standard ++ names.org` | **Done**: the comment says two halves and `opi.lib.orgRPackages` is exported alongside |
+| F7 ⚠️ | REVIEW.md R1 ("no pin-bump automation… silently ages") and R4/R9 | R4/R9 are **done** (templates use `opi.lib.systems`, `flakeModules.default`, `opi.shells`); R1 stands: no bump automation, and the org cache is not a substituter in `nixConfig` | round-1 statuses still need re-triage; the cache part is pre-finalization, not design |
+
+## 13. Should fix
+
+| # | Finding | Evidence |
+|---|---|---|
+| F8 | **No check covers `<pkg>-dev` shells** (`shells/private.nix`) — the only shells the module does not build. Verified by hand that `ojodb-dev` has `ojodb` on `R_LIBS_SITE` and loads, but nothing guards a regression |
+| F9 | `shells/private.nix` puts the package in `packages = [package]` (→ `nativeBuildInputs`) while every other shell uses `rPackages`. It works because R's hook (`addEnvHooks … addRLibPath`) covers both, but the comment attributes it to `propagatedBuildInputs`, which is not the mechanism |
+| F10 | `opi.images` cannot set `user`, `workingDir`, or custom `labels`, though `mkImage` accepts them — a consumer has no way to reach them without importing the lib file out of the opi store path |
+| F11 | The repo has no root `.envrc` although all three templates ship one (S4 item). The org's own checkout is the one place `direnv` does not work |
+| F12 | `readinessHook` runs five subprocesses (`air`/`arf`/`jarl`/`quarto --version`, `which R` twice) on **every** shell entry, including CI's `nix develop` |
+
+## 14. Invariant enforcement
+
+| Inv | Enforced by | Status |
+|---|---|---|
+| 1–2 (one pin, no `rv`) | flake inputs, `nix flake check` | ✓ structural |
+| 3 (immutable R library) | `rShellEnv` pins + `opi-shell-contract` | ✓ |
+| 4 (actionable failures) | `opi-resolver-{unknown-throws,suggests}`, bad-* fixtures | ✓ |
+| 5 (cache retention) | — | policy only |
+| 6 (image from the same declaration) | `opi.images.shell`, `opi-image-config` | ✓ for `shell` users; `shell = null` is the documented escape hatch |
+| 7 (digest, never a tag) | `pushImage` pins `@sha256:` | ✓ in the helper; nothing verifies tfvars |
+| 8 (no dev weight in images) | `opi-env-runtime-only`; `contents` by construction | ✓ |
+| 9 (no credentials) | — | policy only |
+| 10 (image inherits shell env) | `renv.env` (from `rShellEnv`), `opi-env-contract` | ✓ — `QUARTO_R` included since F2's fix |
+| 11 (`flake.lock` is the unit) | labels `revision` + `source` | ✓ |
+| 12 (environment-agnostic) | — | policy only |
+| 13 (declare env, fail at boot) | `opi-image-guard` (runtime half) | **half** — see F3 |
+| 14 (prod from CI, labelled) | labels | **half** — see F3 |
+
+## 15. Gates
+
+`nix flake check` all passed (14 checks on x86_64-linux, 13 on aarch64-linux and
+        aarch64-darwin) · `nix fmt -- --check .` clean ·
+`./scripts/check-consumers` 8/8 · `actionlint` clean on the actions repo ·
+runtime closure 3,475 MiB / 578 paths vs dev shell 10,898 MiB / 858.
+
+## 16. Next, in order
+
+1. ~~F1, F2~~ **done** — the build check is Linux-scoped and `QUARTO_R` moved into
+   `rShellEnv` (shells and images now share it).
+2. **Cachix, pre-finalization** — subscribe `okpolicy` in `flake.nix`'s
+   `nixConfig` and add `cachix-action` where `checks.yml` has its `# P2`
+   placeholder. The cache exists and the shared workflows already use it; this is
+   wiring, not design.
+3. **F3 = step 3** — the pilot: `requiredEnv` read from the CLI config file,
+   Secret Manager mounts, and the CI-only deploy gate. The only real capability
+   gap left in the model.
+4. **F7** — re-triage REVIEW.md's round-1 items (R4/R9 are done; R1 stands).
+5. **F8–F12** — opportunistic; F8 (no check covers `<pkg>-dev` shells) is the one
+   with real risk behind it.

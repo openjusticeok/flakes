@@ -1,9 +1,15 @@
 # Architecture: environments, capabilities, and deployables
 
 Status: **settled (v3)**. The axes (§2), declaration (§3), deploy contract (§4),
-roles (§5) and invariants (§6) are decided. The image/CI half is now implemented
+roles (§5) and invariants (§6) are decided. The image/CI half is implemented
 (`packages.<name>-env`, `lib/mkImage.nix`, `lib/pushImage.nix`); what remains is
 wiring a real pilot (§9, §10). Open items are reduced to triggers (§8).
+
+Two invariants are **half**-enforced, and that is the honest status rather than a
+footnote: inv 13's declaration half (reading `requiredEnv` from the CLI's config
+file) and inv 14's CI-only gate are both step 3 in §9 — the runtime halves exist
+(the entrypoint exits 78, the image carries provenance labels). The rest are
+enforced by a check or by construction; §6 says which.
 
 v3 changes from v2: the runtime closure and the image/push builders are shipped,
 not proposed (§7, §9) — which moved the CI question from "can it be cheaper" to
@@ -346,12 +352,19 @@ failures, cache retention). This document adds:
 9. **No credentials in artifacts.** Images and caches carry no tokens, keys or
    service-account files; identity comes from the platform.
 10. **An image inherits the shell's `env`.** `R_HOME`, `FONTCONFIG_FILE`,
-    `R_LIBS_USER`/`R_ENVIRON_USER`/`R_MAKEVARS_USER`, `QUARTO_R` — the same values,
-    not re-derived ones. Without it, plots render in different fonts than dev and
-    nothing errors (§2b).
+    `QUARTO_R`, `R_LIBS_USER`/`R_ENVIRON_USER`/`R_MAKEVARS_USER` — the same values,
+    not re-derived ones, because both read `lib/rShellEnv.nix`. Without it, plots
+    render in different fonts than dev and nothing errors (§2b). `R_LIBS_SITE` is
+    the exception and deliberately not in `env`: it is a build-time value from
+    R's setup hook, so it lives in the runtime wrapper (first on the image's
+    `PATH`). Anything expressed as a *shellHook* cannot be inherited — that is
+    how `QUARTO_R` silently stopped being true for images for a while.
 11. **`flake.lock` is the reproducible unit; a digest identifies one build of
-    it.** A deployed artifact records its digest *and* the source revision + lock
-    hash it came from (image labels). Reproducibility is a property of the
+    it.** A deployed artifact records its digest *and* the source hash it came
+    from — the flake source, which covers `flake.lock` (image label
+    `org.openjusticeok.source`; the lockfile hash itself was the original plan,
+    but reading a consumer's `flake.lock` at eval time throws when it is
+    untracked, and a fixture's always is). Reproducibility is a property of the
     inputs, not of a byte-identical image — so Cachix retention is sized for the
     rollback window, with rebuild-from-lock as the fallback, not "keep every
     closure forever". This restates invariant 5 rather than replacing it.
@@ -512,4 +525,17 @@ never saw the hand-built list):
 The lesson generalises to the whole model: an artifact that is *composed
 separately* from the shell will drift from it, and the drift is silent until
 something loads a package. Hence `opi-env-loads-transitive-deps` — the one check
-that builds, because "the packages load" is not an eval-time fact.
+that builds, because "the packages load" is not an eval-time fact. It is scoped
+to `x86_64-linux`: the bug it guards is platform-independent, so running it on
+darwin and arm too would only triple CI time (widen it once the cache below is
+subscribed everywhere).
+
+### Cache state
+
+The org cache `okpolicy` exists and the shared workflows already use it
+(`r-ci.yml`, `targets-ci.yml` both run `cachix/cachix-action` with
+`CACHIX_AUTH_TOKEN`). What is still missing: this repo's own `checks.yml` has no
+`cachix-action` (a `# P2` placeholder comment sits where it goes), and
+`flake.nix`'s `nixConfig` advertises only `rstats-on-nix` — so a local `nix build`
+never reads the org cache, and `nix flake check` here neither reads nor pushes it.
+Setting those up is a pre-finalization task, not a P2 design question.
