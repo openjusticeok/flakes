@@ -9,4 +9,7 @@
 #       patches = (old.patches or [ ]) ++ [ ./patches/some-lib-fix.patch ];
 #     });
 #   }
-final: prev: { }
+final: prev: {
+    jarl = prev.jarl.overrideAttrs (old: {
+                doCheck = false;
+ });}

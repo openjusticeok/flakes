@@ -1,16 +1,6 @@
 {
   description = "opi — Open Justice Oklahoma's Nix package set, dev shells, and flake module";
 
-  # Public cache with the fresh CRAN/Bioconductor builds and backported R fixes
-  # we build on. Declared here so consumers get it without hand-editing nix.conf.
-  # Nix prompts once per flake to accept this; opt out with `accept-flake-config
-  # = false` in nix.conf.
-  nixConfig = {
-    extra-substituters = [ "https://rstats-on-nix.cachix.org" ];
-    extra-trusted-public-keys = [
-      "rstats-on-nix.cachix.org-1:vdiiVgocg6WeJrODIqdprZRUrhi1JzhBnXv7aWI6+F0="
-    ];
-  };
 
   inputs = {
     # R/CRAN freshness + backported R fixes. Pinned by rev in flake.lock;
