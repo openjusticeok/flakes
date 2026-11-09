@@ -35,10 +35,10 @@
   "jarl": {
     "owner": "etiennebacher",
     "repo": "jarl",
-    "version": "0.5.0",
+    "version": "0.7.1",
     "tag_prefix": "",
-    "hash": "sha256-MFP1xMNnJ9mfHuUu6hqE9B7nRgI2HfXBpblo3sFnAwo=",
-    "cargo_hash": "sha256-Rhv9Wku/bRl28nrXYof+6VAgl2K4ysILRQa1v19r0pU=",
+    "hash": "sha256-BAhfhoDMDgcRa/ylmsyAnJmDBD0CVOkSzkb6mCUDADY=",
+    "cargo_hash": "sha256-qhwiwawHaPJCsKMfoJBlKlZ/cunUyymTvFDKwdlv3aM=",
     "do_check": false
   },
   "air": {
