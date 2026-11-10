@@ -41,7 +41,7 @@ cache_repo="$cache_root/opi-project-template.git"
 # differences from a template commit are these paths still has a known
 # provenance: rewriting them is what bootstrapping *is*, so it cannot hide which
 # commit the copy started from. Any other difference is refused.
-owned_paths=(README.md flake.nix rproject.toml opi.toml)
+owned_paths=(README.md flake.nix opi.toml)
 
 dry_run=0
 description=""
@@ -326,9 +326,6 @@ set_key opi.toml rev "$rev"
 assert_line opi.toml "^name = \"$name\"$"
 assert_line opi.toml "^rev = \"$rev\"$"
 assert_line opi.toml "^tag = \"$tag\"$"
-
-replace_literal rproject.toml '{{ project_name }}' "$name"
-assert_line rproject.toml "^name = \"$name\"$"
 
 replace_literal flake.nix '{{ project_name }}' "$name"
 assert_line flake.nix "description = \"$name\""
