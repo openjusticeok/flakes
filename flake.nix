@@ -83,6 +83,26 @@
         # be a review topic; the formatter comes from our own nixpkgs pin, so
         # CI and a dev shell agree on the version.
         formatter = pkgs.alejandra;
+
+        # The create step that has to exist until the CLI ships. GitHub's
+        # template copy renders nothing (so every `{{ ... }}` arrives literally)
+        # and no commit can name its own hash (so the template cannot ship a
+        # correct `[template] tag`/`rev`). Provenance is therefore derived from
+        # the new repo's root-commit tree, which is byte-identical to the
+        # template commit it came from. A package rather than a dev-shell
+        # function because it has to work inside a repo whose own shell is not
+        # set up yet: `nix run github:openjusticeok/flakes#opi-bootstrap`.
+        # Delete it with scripts/bootstrap-template once `opi project scaffold`
+        # lands (docs/adr/0002 in openjusticeok/opi).
+        packages.opi-bootstrap = pkgs.writeShellApplication {
+          name = "opi-bootstrap";
+          runtimeInputs = [pkgs.git pkgs.gnugrep pkgs.gawk pkgs.coreutils];
+          # writeShellApplication emits its own shebang and `set` header, so the
+          # file's shebang is stripped rather than duplicated mid-file.
+          text = pkgs.lib.removePrefix "#!/usr/bin/env bash\n" (
+            builtins.readFile ./scripts/bootstrap-template
+          );
+        };
       };
 
       flake = {

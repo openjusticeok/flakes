@@ -8,8 +8,11 @@
 # construction, ARCHITECTURE §5 fact 2).
 #
 #   package   a $out/bin/{R,Rscript} wrapper with the env baked in — `nix run`
-#             it directly, e.g. `nix run .#default-env -- -e 'targets::tar_make()'`
-#   paths     the store paths to put in an OCI image's copyToRoot
+#             it directly, e.g. `nix run .#default-env -- -e 'targets::tar_make()'`,
+#             and the one thing an image copies: it lands at `/bin`, and its
+#             closure (R + every R package) arrives at store paths, which is what
+#             R_LIBS_SITE points at. Passing the closure itself as copyToRoot
+#             would flatten it and break both.
 #   env       the env attrset for an image's config.env (same values as the shell,
 #             minus R_LIBS_SITE: that is a build-time value produced by R's own
 #             setup hook, so it lives in the wrapper. An image therefore runs R
@@ -66,9 +69,6 @@ in {
 
   inherit resolved;
   inherit rLibsSite;
-
-  # What an image copies and what a closure measurement covers.
-  paths = [pkgs.R] ++ resolved;
 
   env = shellEnv;
 }

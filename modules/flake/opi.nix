@@ -157,7 +157,15 @@ in {
                 (
                   if renv == null
                   then []
-                  else renv.paths
+                  else
+                    # The wrapper, NOT the list of packages. copyToRoot flattens
+                    # each entry to `/`, so passing `paths` here rewrote 578 store
+                    # paths to the root — where every package's
+                    # nix-support/propagated-build-inputs collided, and R moved
+                    # off the store path R_LIBS_SITE points at. The wrapper is
+                    # what belongs at `/bin`; its closure (R and every R package)
+                    # follows as dependencies, at their store paths.
+                    [renv.package]
                 )
                 ++ cfg.contents;
               env =
@@ -181,9 +189,23 @@ in {
                     }
                 )
                 // cfg.env;
-              inherit (cfg) entrypoint requiredEnv cmd tag port;
+              inherit (cfg) entrypoint requiredEnv cmd tag port user workingDir labels;
+
+              # Provenance (inv 11, inv 14). Both are best-effort and *absent*
+              # rather than wrong when unavailable: `rev` only exists for a clean
+              # git source, and the source label is the store-path name of the
+              # flake source tree (which covers `flake.lock`) when that source is
+              # in the store. Note `self` for a flake in a subdirectory is
+              # `<store>/<hash>-source/sub/dir`, so the hash is the first path
+              # component — taking `baseNameOf` labelled images "image".
               revision = inputs.self.rev or null;
-              source = baseNameOf (toString inputs.self);
+              source = let
+                path = toString inputs.self;
+                prefix = "/nix/store/";
+              in
+                if lib.hasPrefix prefix path
+                then builtins.head (lib.splitString "/" (lib.removePrefix prefix path))
+                else null;
             };
           }
         )
@@ -300,6 +322,24 @@ in {
                 description = "Port to expose (Cloud Run sets $PORT).";
               };
 
+              user = lib.mkOption {
+                type = lib.types.str;
+                default = "1000:1000";
+                description = "Non-root user the container runs as. Cloud Run allows any uid; files in the image are root-owned and read-only, which is what a runtime wants.";
+              };
+
+              workingDir = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                default = null;
+                description = "Working directory. Assets passed in `contents` land at the image root, so an app that expects to be beside its code sets `/`, or its entrypoint names the path explicitly.";
+              };
+
+              labels = lib.mkOption {
+                type = lib.types.attrsOf lib.types.str;
+                default = {};
+                description = "Extra OCI labels. Provenance labels (revision, source hash, required-env) are added automatically and cannot be overwritten here.";
+              };
+
               tfvars = lib.mkOption {
                 type = lib.types.str;
                 default = "infra/tofu/terraform.tfvars";
@@ -360,17 +400,25 @@ in {
         // lib.mapAttrs' (imageName: v: lib.nameValuePair "${imageName}-image" v.image) opiImages;
 
       # The deploy step: push, resolve the digest, pin it in tfvars, and say what
-      # to run next (lib/pushImage.nix).
+      # to run next (lib/pushImage.nix). Emitted as a real flake `app` rather than
+      # a bare derivation: flake-parts' app type does not accept one, and a
+      # derivation here fails only when someone actually runs `nix run` — which no
+      # check did until the example tried it.
       config.apps =
         lib.mapAttrs' (
-          imageName: v:
-            lib.nameValuePair "${imageName}-push" (import ../../lib/pushImage.nix {
+          imageName: v: let
+            push = import ../../lib/pushImage.nix {
               inherit pkgs lib;
               image = v.image;
               flakeAttr = "${imageName}-image";
               inherit (config.opi.images.${imageName}) tfvars migrateJob region;
               project = config.opi.images.${imageName}.gcpProject;
-            })
+            };
+          in
+            lib.nameValuePair "${imageName}-push" {
+              type = "app";
+              program = "${push}/bin/opi-push-image";
+            }
         )
         opiImages;
     }
