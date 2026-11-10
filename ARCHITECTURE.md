@@ -415,6 +415,27 @@ the *contents* are ecosystem-specific (`mkRenv` for R, `crane` for Rust); the
 should not hand-roll digest resolution; it should not be forced to adopt an R
 builder either.
 
+### What building the first real image taught
+
+`examples/image` — a Shiny app with an entrypoint, the pilot's shape — found three
+things that no eval-time check would have:
+
+1. **`copyToRoot` flattens.** Handing the runtime closure to `copyToRoot` unpacks
+   all 578 store paths at `/`, where their `nix-support/propagated-build-inputs`
+   collide (nix2container refuses the build) — and it moves R off the store path
+   that `R_LIBS_SITE` names, so R would fail even if the layer were built. An
+   image copies the *wrapper*, which lands at `/bin`; R and its packages arrive as
+   its dependencies, at their store paths. `mkImage` never needed changing — the
+   module's usage did.
+2. **An `apps.*` entry is a flake app, not a derivation.** `pushImage` was
+   emitted as a bare derivation, which flake-parts rejects when `nix run` forces
+   the value. Every check had only looked at attribute *names*, so this survived
+   review and CI.
+3. **A shell without the app's own R packages builds a valid image that dies at
+   boot.** The `shiny` *bundle* is tooling (chromium, node for shinytest2); the
+   `shiny` *package* has to be listed. This is the failure `requiredEnv` cannot
+   catch, and the reason the pilot must be run, not just built.
+
 ## 8. Open questions
 
 Answered in review (kept for the record): layers are not a noun (→ §5); CI is

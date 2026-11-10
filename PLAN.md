@@ -88,10 +88,10 @@ are in `ARCHITECTURE.md` §6. They govern the artifacts this file's phases build
   image/push builders (`lib/{mkRenv,runtimeEnv,mkImage,pushImage}.nix` — ~800
   lines of new capability, which is why the S2 line count no longer describes
   today). `nix2container` is the 12th lock node, so S4's target becomes 8.
-- **The module path is covered.** `nix flake check` builds 14 checks on
-  x86_64-linux (13 elsewhere: `opi-env-loads-transitive-deps` is the one that
+- **The module path is covered.** `nix flake check` builds 15 checks on
+  x86_64-linux (14 elsewhere: `opi-env-loads-transitive-deps` is the one that
   builds the R closure and is Linux-scoped on purpose), and
-  `scripts/check-consumers` evaluates 8 consumer cases (2 examples, 3 templates,
+  `scripts/check-consumers` evaluates 9 consumer cases (3 examples, 3 templates,
   one good and two bad module fixtures) plus packages/images, and example lock
   freshness — run by CI.
   Before S0 there was one `tryEval` check and no consumer evaluation at all.
@@ -373,7 +373,7 @@ style already lives.
 | pkgs instantiations per consumer | 2 | **1** | 1 |
 | shell-composition mechanisms | 4 | **1** | 1 |
 | bundle files | 4 | **1** | 1 |
-| templates / examples | 4 / 3 | **3 / 2** | 3 / 2 |
+| templates / examples | 4 / 3 | **3 / 2** | 3 / 3 (`examples/image` joins in P1: the pilot's shape) |
 | lock nodes | 11 | 11 | 8 (`nix2container` lands in P1; S4 then cuts the four private `nixpkgs` duplicates) |
 | files deleted | — | `lib/mkPackageShell.nix`, `lib/orgPackageNames.nix`, `checks/fixtures/bad-base`, 3 bundle files, `templates/census`, `examples/base-direct` | 2 overlay files, `scripts/develop` (not `scripts/check-consumers`, added by S0) |
 
@@ -395,6 +395,7 @@ shell became one, and two package sets became one.
 | P2 Cachix + bump automation | missing: `nixConfig` advertises only `rstats-on-nix`; no org cache, no push step, no `lockFileMaintenance` — the `r-daily` pin never advances on its own (REVIEW R1) |
 | P3 consumer migration | **table below**; the sweep itself is unstarted. Migrate when the API settles (after S3) so consumers edit their flake once. The four repos that call `actions/.../targets-ci.yml@v1` need it soonest: `demo-main-lockdown` and `demo-opi-project-template` still use `opi-flakes.base.devShells` (gone), `opi-project-template` and `youth-justice-listening-circles` still import `flakeModules.opi` (renamed `default`) and pass `layers` (gone). All four need a `flake.lock` bump, and the workflow change reaches them only when the `v1` tag moves |
 | P4 rename `flakes` → `nix` | not started; last, post-review/merge |
+| P5 local dev services | **not started** — new scope, not from the original review: `apps.<svc>` for postgres + the OTel viewer from one declaration, with re-entry/teardown checks. Trigger: the `oscn-rs` migration to `opi.flakeModules.default`. See below |
 | Docs | none: no README/DEVELOPMENT (also absent on `main`). Issues #35/#36 (adding a package mid-session; `install.packages()` soft error) are docs answers, not code |
 | `x86_64-darwin` | unsupported; S2 makes the failure message honest |
 
@@ -416,6 +417,73 @@ spellings fail at the import line or as an unknown option, which is the intent.
 | per-project `rproject.toml` / `rv.lock` / `.Rprofile` / `rv/` | delete; declare R packages in `opi.shells.<n>.rPackages` |
 | `install.packages()` inside a session | edit `rPackages` and re-enter the shell (immutable by design) |
 | `nix develop --command rv sync` / `rv run -e …` in CI | `nix build .#<shell>-env`, then `<path>/bin/Rscript -e …` (the `targets-ci.yml` workflow does this; `shell_name` input, default `default`) |
+
+### P5 — Local dev services (postgres, OTel viewer) — **not started**
+
+Not a shell: a local stack. Every repo that needs a database today writes its own
+`initdb` → `pg_ctl` → `createuser`/`createdb` → `trap` script. `oscn-rs` is the
+specimen (`flake.nix`: `db-script`, `prepare-script`, `otel-viewer-script`; state
+in `.nix-dev/`). ARCHITECTURE §4 already states the *intent* — "local state is a
+gitignored directory (`.nix-dev/{pgdata,telemetry.duckdb}`) created by `apps`,
+not committed" — and this phase owns the implementation, so the intent stops
+being a per-repo copy.
+
+Same class as `pushImage`: bespoke per repo, and the failures are silent. What
+the specimen gets wrong, most expensive first:
+
+| Symptom in `oscn-rs` | Consequence |
+|---|---|
+| `tail -f /dev/null` + `trap cleanup EXIT` | `SIGKILL` skips the trap → stale `postmaster.pid`/socket in `.nix-dev/`; `nix run .#db &` never exits in CI; no restart, no log multiplexing |
+| `echo "DATABASE_URL=…"` | the value is printed, not exported, so the docs ask for a *second* variable (`TEST_DATABASE_URL`) by hand — the `QUARTO_R` shape: an echoed value is not an inherited one (inv 10) |
+| `$PWD/.nix-dev/pgdata`, fixed port 5432 | a second worktree of the same repo, or a system postgres, collides; run from a subdirectory and you get a second cluster |
+| `createuser … 2>/dev/null \|\| true` | swallows every failure, not only "already exists" — the `sed`-matches-nothing bug `pushImage` already guards |
+| readiness (`pg_isready`) re-implemented in `prepare` | two repos, two variants, neither asserted |
+
+**Surface (proposed, deliberately small):**
+
+```nix
+opi.devServices.postgres = {
+  enable = true;                    # → apps.db, state in .nix-dev/postgres
+  databases.oscn_db = {};           # created + owned on first start
+  env.DATABASE_URL = "auto";        # exported into shells that include the service
+};
+opi.devServices.otel = {enable = true;}; # otel-desktop-viewer, .nix-dev/telemetry.duckdb
+```
+
+Two services is the whole list, and a third is a signal the option is wrong. Not
+Rust-specific: an R `DBI`/`targets` project has the same gap today. The service
+exports its env, so a shell either has the database or does not — there is no
+third state where the value is on screen but not in `$DATABASE_URL`.
+
+**Out of scope:** tasks. `prepare`/`migrate`/`push` are `apps` and stay
+project-owned; opi does not grow a task runner (the same reason §5 rejects a
+package taxonomy — it is a noun with no invariant behind it).
+
+**Acceptance:** one declaration materializes as `apps.<name>` *and* the shell's
+`env`, plus the two checks a hand-written script never gets:
+
+- `<svc>-reentry` — start twice; the second attaches, does not re-`initdb`, does
+  not fail.
+- `<svc>-teardown` — `SIGKILL` the supervisor, then start again: the stale PID
+  and socket are recovered without a manual `rm -rf .nix-dev`.
+
+**Rejected in advance: adopting devenv to get this.** `devenv up` requires
+`--no-pure-eval` (it reads the working directory), which would put an impure path
+in every consumer's base shell and break `nix flake check` evaluating shells;
+and `devenv container build processes` is the one container path that ships the
+*dev* closure — the opposite of `mkRenv` (inv 8). A project that genuinely wants
+a supervisor (multi-process `up`, a services graph) imports devenv itself and
+maps `opi.shells.<n>` onto `devenv.shells.<n>` in its own flake. opi does not
+take devenv as an input and does not grow a process supervisor; what is borrowed
+is the *semantics* — declaration, lifecycle, exported env, readiness — not the
+framework.
+
+**Trigger:** `oscn-rs` migrating to `opi.flakeModules.default`. It is the
+reference implementation for ARCHITECTURE §4 and its `push-image` is what
+`lib/pushImage.nix` generalizes, so `apps.push-image` and `oscnImage` disappear
+cleanly — but `db`/`prepare`/`otel-viewer` have no opi home, which makes the
+migration blocked on at least the postgres convention. Earlier if a second repo
+writes its own `pg_ctl` harness before then.
 
 ## Bump process (monthly)
 

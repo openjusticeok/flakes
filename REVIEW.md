@@ -325,6 +325,10 @@ kept inline rather than rewritten, so the review's errors stay visible.**
 `nix flake check` all passed (14 checks on x86_64-linux, 13 on aarch64-linux and
         aarch64-darwin) · `nix fmt -- --check .` clean ·
 `./scripts/check-consumers` 8/8 · `actionlint` clean on the actions repo ·
+
+*(Round-3 snapshot. Current: 15 checks on x86_64-linux, 14 elsewhere, and
+`check-consumers` 12/12 — the new `opi-private-dev-shells` check and
+`examples/image` are §17's.)*
 runtime closure 3,475 MiB / 578 paths vs dev shell 10,898 MiB / 858.
 
 ## 16. Next, in order
@@ -341,3 +345,32 @@ runtime closure 3,475 MiB / 578 paths vs dev shell 10,898 MiB / 858.
 4. **F7** — re-triage REVIEW.md's round-1 items (R4/R9 are done; R1 stands).
 5. **F8–F12** — opportunistic; F8 (no check covers `<pkg>-dev` shells) is the one
    with real risk behind it.
+
+## 17. Findings from building the first real image (step-3 groundwork)
+
+`examples/image` (a Shiny app: shell + `opi.images.dashboard` + push app) is now
+in the tree, and building and running it found three bugs that no eval-time check
+had caught — all in code merged before this round.
+
+| # | Finding | Evidence | Status |
+|---|---|---|---|
+| F13 | **`copyToRoot` flattens the closure.** The module passed `renv.paths` (578 store paths) as image contents, which unpacks them all at `/`: every package's `nix-support/propagated-build-inputs` collides (nix2container: *"the file … already exists in the graph"*), and R moves off the store path `R_LIBS_SITE` names. | `nix build .#dashboard-image` failed in `layers.json` | **fixed**: the module copies `[renv.package]` (the wrapper → `/bin`), so R and its packages arrive as dependencies at their store paths; `mkRenv.paths` removed (it invited the mistake) |
+| F14 | **`apps.<n>-push` was a bare derivation**, which flake-parts rejects when forced. Invisible because `check-consumers` and `nix flake check` only looked at attribute *names* — `nix run .#dashboard-push` was the first thing to force the value. | `error: The option 'perSystem.…apps.dashboard-push.NIX_MAIN_PROGRAM' does not exist` | **fixed**: emitted as `{ type = "app"; program = …; }` |
+| F15 | **The example itself was wrong in an instructive way**: the `shiny` bundle is tooling (chromium/node), so listing only `bslib` built a valid image whose entrypoint would die with *"there is no package called 'shiny'"*. | running the runtime closure: `HTTP 200` only after adding `"shiny"` to `rPackages` | **fixed** in the example, with a comment; this is the class of bug `requiredEnv` cannot catch, hence "run the pilot, don't just build it" |
+
+Verified for the example: image builds (15 s), manifest carries
+`Entrypoint = ["/bin/Rscript" "-e" …]`, `User = 1000:1000`, `WorkingDir = /`,
+`ExposedPorts = 8080/tcp`, 7 env vars including `PATH`/`QUARTO_R`/`R_HOME`, and
+`org.openjusticeok.source = <store-hash>-source`; `app.R` and the wrapper are
+rewritten to `/app.R` and `/bin`; the app serves HTTP 200 from the runtime
+closure; `nix run .#dashboard-push -- --dry-run` prints target, current pin, and
+what it would pin.
+
+Also closed this round: **F8** (new check `opi-private-dev-shells`, 15 checks on
+x86_64-linux), **F10** (`opi.images` gained `user`, `workingDir`, `labels`),
+**F11** (root `.envrc`; `scripts/develop` deleted — its premise, private flakes not
+being published, has been false for a while).
+
+*Correction to F14's first appearance:* the example's `flakeModules.default` import
+was briefly written as `flakeModule.default` — an attribute typo that fails only at
+evaluation, which is why examples stay in `check-consumers`.
