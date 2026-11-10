@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.7.1 (2026-11-10)
+
+### Added
+
+- commit `checks/fixtures/module-ok/flake.lock`, so the one fixture that proves
+  `opi.shells` still composes resolves its inputs from a lock like every example
+  and template, instead of re-resolving them on each `check-consumers` run
+
+### Fixed
+
+- stop `opi-bootstrap` from rewriting `rproject.toml`, which no template ships
+  now that rv is gone: the rewrite died on the missing file before any
+  placeholder was filled, so a copy of the current template could not bootstrap
+- drop `rproject.toml` from the script's `owned_paths`, so the provenance
+  comparison no longer expects a file the template does not contain
+
 ## v0.7.0 (2026-11-10)
 
 ### Added
