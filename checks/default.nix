@@ -62,13 +62,17 @@
       rPackages = ["sf"];
     };
 
-    inEnv = needle: builtins.any (p: lib.hasInfix needle (p.name or "")) baseEnv.paths;
+    # Everything the runtime closure contains: the wrapper (what an image copies)
+    # plus the packages it references.
+    envPaths = [baseEnv.package pkgs.R] ++ baseEnv.resolved;
+
+    inEnv = needle: builtins.any (p: lib.hasInfix needle (p.name or "")) envPaths;
 
     envArrowCount = builtins.length (
       builtins.filter (
         p: builtins.match "r-arrow-.*" (p.name or "") != null
       )
-      baseEnv.paths
+      envPaths
     );
 
     # An image composed the way a project would, with small `contents` on
@@ -96,6 +100,29 @@
       region = "us-central1";
       project = "probe-project";
     };
+
+    # `<pkg>-dev` shells are the only shells the module does not build: they come
+    # from shells/private.nix and put the org package in `packages` (which mkShell
+    # maps to nativeBuildInputs, where R's envHook finds it) instead of
+    # `rPackages`. Nothing checked that path at all.
+    orgPackages = import ../lib/orgPackages.nix {inherit inputs system lib;};
+
+    devShellProblems =
+      builtins.concatMap (
+        pkgName: let
+          shellName = "${pkgName}-dev";
+          shell = config.devShells.${shellName} or null;
+          expected = orgPackages.packages.${pkgName}.name or null;
+          carries =
+            shell
+            != null
+            && builtins.any (p: (p.name or null) == expected) (shell.nativeBuildInputs or []);
+        in
+          if carries
+          then []
+          else [shellName]
+      )
+      orgPackages.names;
 
     # A project-shaped shell, composed the way the module composes one (extras
     # on top of the org environment, same pkgs). S1's acceptance criterion is
@@ -340,6 +367,13 @@
             && builtins.any (p: p.drvPath == pkgs.rPackages.arrow.drvPath) baseShell.buildInputs
           )
           "the base shell carries zero or several `arrow` derivations — a second package set is leaking in";
+
+        # The private-package dev shells: one per org package, each carrying that
+        # package so its propagated deps land on R_LIBS_SITE.
+        opi-private-dev-shells =
+          check "opi-private-dev-shells"
+          (devShellProblems == [])
+          "these <pkg>-dev shells are missing or do not carry their org package: ${lib.concatStringsSep ", " devShellProblems}";
 
         # The project path (org environment + extras) keeps the same properties:
         # one arrow, the org env intact, the project's own env applied on top.

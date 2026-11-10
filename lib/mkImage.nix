@@ -1,7 +1,8 @@
 # The generic image builder: org conventions over nix2container, and nothing
 # ecosystem-specific. It must never learn about R or Rust (ARCHITECTURE §7) —
-# the caller hands it `contents` (for R: `mkRenv.paths`) and `env` (for R:
-# `mkRenv.env`), which is why the same builder serves a Rust artifact.
+# the caller hands it `contents` (for R: `mkRenv`'s wrapper, whose closure brings
+# R and the packages) and `env` (for R: the runtime env), which is why the same
+# builder serves a Rust artifact.
 #
 # What it adds over nix2container:
 #
@@ -107,6 +108,10 @@
       ExposedPorts."${toString port}/tcp" = {};
     };
 
+  # copyToRoot entries are flattened to `/`: a store path's contents are unpacked
+  # at the image root, and its closure follows at the original store paths. That
+  # is the distinction that matters for a runtime — the entrypoint belongs at a
+  # stable path, the runtime belongs at the path its own config refers to.
   image = nix2container.buildImage {
     inherit name tag;
     copyToRoot = contents ++ lib.optional guarded guard;
@@ -117,5 +122,10 @@ in
   image
   // {
     inherit requiredEnv envList;
+    # What the image claims about where it came from, exposed so the push helper
+    # and a project's tofu can read it (`nix eval .#<n>-image.provenance`) instead
+    # of re-deriving it. `null` fields mean "unknown", which a local path build
+    # legitimately is.
+    provenance = {inherit revision source;};
   }
   // lib.optionalAttrs guarded {inherit guard;}

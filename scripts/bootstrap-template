@@ -1,0 +1,350 @@
+#!/usr/bin/env bash
+# Bootstrap a repo created from the opi project template.
+#
+# GitHub's "Use this template" copies the template's default branch verbatim and
+# re-roots it: the new repo gets one commit authored by whoever clicked, with a
+# tree byte-identical to the template commit it came from. Nothing is rendered,
+# so every `{{ ... }}` placeholder arrives literally, and no commit can name its
+# own hash -- which is why the template cannot ship a correct `[template]
+# tag`/`rev` and why this script exists instead of a release ritual.
+#
+# The provenance it writes is derived, not asserted: the root commit's tree *is*
+# the template commit, so matching that hash against the template's history
+# yields the exact rev, and `git describe` yields its tag. A value written by
+# hand is a claim; this one is reproducible by anyone holding both repos.
+# See docs/adr/0002 in openjusticeok/opi.
+#
+# Delete this script when `opi project scaffold` ships. The derivation belongs in
+# the CLI's Git port; a second implementation of it is a fork (D1 and section 5
+# of docs/architecture.md in that repo).
+#
+# Usage:
+#   opi-bootstrap                      # fill what is derivable, verify provenance
+#   opi-bootstrap --dry-run            # print the plan, write nothing
+#   opi-bootstrap --description "One-line summary for the README"
+#   opi-bootstrap --template-dir ~/code/openjusticeok/opi-project-template
+#   opi-bootstrap --help
+#
+# Exits non-zero, writing nothing, when provenance cannot be determined: that is
+# a real answer ("this was not copied from the template, or was edited first"),
+# not a reason to fall back to the template's current default-branch tip, which
+# names a commit the copy may never have contained.
+
+set -euo pipefail
+
+template_repo="openjusticeok/opi-project-template"
+template_url="https://github.com/${template_repo}.git"
+cache_root="${XDG_CACHE_HOME:-$HOME/.cache}/opi"
+cache_repo="$cache_root/opi-project-template.git"
+
+# Paths the template ships with `{{ ... }}` placeholders. A copy whose only
+# differences from a template commit are these paths still has a known
+# provenance: rewriting them is what bootstrapping *is*, so it cannot hide which
+# commit the copy started from. Any other difference is refused.
+owned_paths=(README.md flake.nix rproject.toml opi.toml)
+
+dry_run=0
+description=""
+template_dir=""
+
+usage() {
+  cat <<'EOF'
+opi-bootstrap -- fill the opi project template's placeholders and record
+                 template provenance, derived from the root commit's tree.
+
+Options:
+  --dry-run              print the plan; write nothing
+  --description TEXT     README one-liner (default: `gh repo view`, else TODO)
+  --template-dir PATH    use an existing opi-project-template checkout
+  -h, --help             this text
+
+Run it inside the new repo, before editing anything: the commits that exist
+when it runs do not matter, but the root commit must still be the copy.
+EOF
+}
+
+die() {
+  printf 'opi-bootstrap: %s\n' "$*" >&2
+  exit 1
+}
+
+note() {
+  printf '%s\n' "$*" >&2
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dry-run) dry_run=1 ;;
+    --description)
+      shift
+      [ $# -gt 0 ] || die "--description needs a value"
+      description=$1
+      ;;
+    --template-dir)
+      shift
+      [ $# -gt 0 ] || die "--template-dir needs a value"
+      template_dir=$1
+      ;;
+    --help | -h)
+      usage
+      exit 0
+      ;;
+    *) die "unknown argument: $1 (try --help)" ;;
+  esac
+  shift
+done
+
+# ------------------------------------------------------------------- the target
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) ||
+  die "not inside a git repo; run this in the repo created from the template"
+cd "$root"
+
+[ -f opi.toml ] || die "no opi.toml here; this repo was not created from $template_repo"
+
+name=${PWD##*/}
+printf '%s' "$name" | grep -Eq '^[a-z0-9]+(-[a-z0-9]+)*$' ||
+  die "directory name '$name' is not kebab-case, which opi.toml requires (GitHub
+  permits characters the manifest rejects; rename the directory first)"
+
+if origin=$(git config --get remote.origin.url 2>/dev/null) && [ -n "$origin" ]; then
+  remote_name=$(basename "${origin%.git}")
+  if [ "$remote_name" != "$name" ]; then
+    note "note: origin is '$remote_name' but the directory is '$name'; writing the"
+    note "  directory name, which is the field opi.toml names (ADR 0001)."
+  fi
+fi
+
+# ------------------------------------------------------------ template history
+
+ensure_template() {
+  if [ -n "$template_dir" ]; then
+    tpl=$(cd "$template_dir" && pwd)
+    git -C "$tpl" rev-parse --git-dir >/dev/null 2>&1 ||
+      die "--template-dir '$template_dir' is not a git checkout"
+    return
+  fi
+  if [ ! -d "$cache_repo" ]; then
+    mkdir -p "$cache_root"
+    # Blobless: matching needs trees only, so the cache stays small and every
+    # `ls-tree` below works offline afterwards.
+    git clone --bare --filter=blob:none --quiet "$template_url" "$cache_repo" ||
+      die "could not clone $template_repo (use --template-dir for an offline copy)"
+  fi
+  if ! git -C "$cache_repo" fetch --quiet --prune origin \
+    '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*' 2>/dev/null; then
+    note "note: could not refresh $template_repo; using the cached history."
+    note "  Matching is content-addressed, so a stale cache can only miss a commit"
+    note "  the template gained since, never misattribute one."
+  fi
+  tpl=$cache_repo
+}
+
+ensure_template
+
+# The copy as it arrived: the root commit's tree, not HEAD's. A human may have
+# committed edits already; those do not change what the copy received.
+root_commit=$(git rev-list --max-parents=0 HEAD 2>/dev/null | head -n 1 || true)
+if [ -n "$root_commit" ]; then
+  copy_tree=$(git rev-parse "$root_commit^{tree}")
+  copy_source="root commit $root_commit"
+else
+  # No commit yet: the working tree is still the untouched copy. Stage it into a
+  # throwaway index so the real one is never touched -- inside a temp directory,
+  # because git rejects a zero-byte index file ("smaller than expected").
+  tmp_dir=$(mktemp -d)
+  tmp_index="$tmp_dir/index"
+  trap 'rm -rf "$tmp_dir"' EXIT
+  GIT_INDEX_FILE=$tmp_index git add -A -- . >/dev/null 2>&1 ||
+    die "could not stage the working tree into a temporary index"
+  copy_tree=$(GIT_INDEX_FILE=$tmp_index git write-tree)
+  rm -rf "$tmp_dir"
+  trap - EXIT
+  copy_source="working tree (no commit yet)"
+fi
+
+rev=$(git -C "$tpl" log --all --no-decorate --format='%H %T' |
+  awk -v tree="$copy_tree" '$2 == tree { print $1; exit }') || true
+
+# "sha<TAB>path" per entry, sorted, comparable across two repos.
+entries() {
+  git -C "$1" ls-tree -r "$2" |
+    awk -F'\t' '{ split($1, meta, " "); print meta[3] "\t" $2 }' | sort
+}
+
+# Commit-ish per ref: annotated tags peel, branches are already commits.
+release_or_tip() {
+  git -C "$tpl" for-each-ref --format='%(objectname) %(*objectname)' refs/heads refs/tags |
+    awk '{ print ($2 != "" ? $2 : $1) }' | sort -u
+}
+
+if [ -z "$rev" ]; then
+  # Not attributable on the nose. Compare against the tags and branch tips so the
+  # report names real paths instead of "no match".
+  best_count=-1
+  best_rev=""
+  best_paths=""
+  mine=$(mktemp)
+  entries "$root" "$copy_tree" >"$mine"
+  for candidate in $(release_or_tip); do
+    theirs=$(mktemp)
+    entries "$tpl" "$candidate" >"$theirs"
+    paths=$(comm -3 "$mine" "$theirs" | sed 's/^\t//' | cut -f2 | sort -u)
+    count=$(printf '%s' "$paths" | grep -c . || true)
+    if [ "$best_count" -lt 0 ] || [ "$count" -lt "$best_count" ]; then
+      best_count=$count
+      best_rev=$candidate
+      best_paths=$paths
+    fi
+    rm -f "$theirs"
+  done
+  rm -f "$mine"
+
+  attributable=0
+  if [ -n "$best_rev" ] && [ -n "$best_paths" ]; then
+    attributable=1
+    for path in $best_paths; do
+      is_owned=0
+      for owned in "${owned_paths[@]}"; do
+        [ "$path" = "$owned" ] && is_owned=1
+      done
+      [ "$is_owned" = 1 ] || attributable=0
+    done
+  fi
+
+  if [ "$attributable" = 1 ]; then
+    rev=$best_rev
+    note "note: $copy_source differs from $best_rev only in the files this script"
+    note "  rewrites, so the copy's provenance is still that commit:"
+    printf '%s\n' "$best_paths" | sed 's/^/    /' >&2
+  else
+    closest=$(git -C "$tpl" describe --tags --abbrev=0 "$best_rev" 2>/dev/null || true)
+    note "cannot determine which template commit this copy came from."
+    note ""
+    note "  closest: $best_rev${closest:+ ($closest)}"
+    if [ -n "$best_paths" ]; then
+      note "  paths that differ:"
+      printf '%s\n' "$best_paths" | sed 's/^/    /' >&2
+    fi
+    note ""
+    note "Nothing was written. Either this repo was not created from $template_repo,"
+    note "or it was edited before bootstrapping. To record provenance anyway, read"
+    note "the closest commit above and set tag/rev in opi.toml by hand."
+    exit 1
+  fi
+fi
+
+tag=$(git -C "$tpl" describe --tags --abbrev=0 "$rev" 2>/dev/null || true)
+tag_commit=""
+if [ -n "$tag" ]; then
+  tag_commit=$(git -C "$tpl" rev-parse "$tag^{commit}")
+fi
+
+# ------------------------------------------------------------- the description
+
+if [ -z "$description" ] && command -v gh >/dev/null 2>&1; then
+  description=$(gh repo view --json description --jq '.description // ""' 2>/dev/null || true)
+fi
+if [ -z "$description" ]; then
+  description="TODO: one-line description of this repo."
+  note "note: no description available; pass --description to set one"
+fi
+
+# -------------------------------------------------------------------- reporting
+
+note "template: $template_repo"
+note "  rev: $rev"
+if [ -n "$tag" ]; then
+  note "  tag: $tag"
+  if [ "$tag_commit" != "$rev" ]; then
+    note "  note: the template has commits after $tag, so this copy is unreleased"
+    note "  work. Nothing is wrong, but the rev will not match a released tag."
+  fi
+else
+  note "  tag: none reachable; opi.toml will record an empty tag on purpose"
+fi
+note "  copy: $copy_source"
+
+recorded=$(sed -n 's/^rev *= *"\([0-9a-f]\{40\}\)".*/\1/p' opi.toml)
+placeholders=$(grep -l '{{' "${owned_paths[@]}" 2>/dev/null || true)
+
+if [ -z "$placeholders" ] && [ -n "$recorded" ]; then
+  if [ "$recorded" = "$rev" ]; then
+    note ""
+    note "already bootstrapped; provenance verified against the root tree."
+    exit 0
+  fi
+  die "opi.toml records $recorded but the root tree is $rev. Either the file was
+  edited after bootstrapping or it was copied from elsewhere. Fix the rev by
+  hand, or delete opi.toml and re-run."
+fi
+
+if [ "$dry_run" = 1 ]; then
+  note ""
+  note "dry run: name='$name' tag='$tag' rev='$rev'; placeholders in:"
+  printf '%s\n' "$placeholders" | sed 's/^/  /' >&2
+  exit 0
+fi
+
+# ----------------------------------------------------------------------- writes
+
+# Replace the first literal occurrence of $2 with $3 in $1. Values reach awk
+# through the environment so regex metacharacters in a description stay inert.
+replace_literal() {
+  opi_old=$2 opi_new=$3 awk '
+    BEGIN { old = ENVIRON["opi_old"]; new = ENVIRON["opi_new"]; done = 0 }
+    !done {
+      i = index($0, old)
+      if (i) { $0 = substr($0, 1, i - 1) new substr($0, i + length(old)); done = 1 }
+    }
+    { print }
+  ' "$1" >"$1.opi-tmp"
+  mv "$1.opi-tmp" "$1"
+}
+
+# Rewrite a whole `key = ...` line and leave every other byte alone, so the
+# template stays the single definition of the file's shape and comments survive.
+# The manifest is edited, never re-serialized (ADR 0001, rule 1).
+set_key() {
+  opi_key=$2 opi_val=$3 awk '
+    BEGIN { k = ENVIRON["opi_key"]; v = ENVIRON["opi_val"] }
+    $0 ~ "^" k "[[:space:]]*=" { printf "%s = \"%s\"\n", k, v; next }
+    { print }
+  ' "$1" >"$1.opi-tmp"
+  mv "$1.opi-tmp" "$1"
+}
+
+# Re-read after every write: a sed that matches nothing exits 0, so success has
+# to be asserted (section 7 of docs/architecture.md).
+assert_line() {
+  grep -Eq -- "$2" "$1" || die "wrote $1 but it does not match /$2/; stopped here"
+}
+
+replace_literal opi.toml '{{ project_name }}' "$name"
+set_key opi.toml tag "$tag"
+set_key opi.toml rev "$rev"
+assert_line opi.toml "^name = \"$name\"$"
+assert_line opi.toml "^rev = \"$rev\"$"
+assert_line opi.toml "^tag = \"$tag\"$"
+
+replace_literal rproject.toml '{{ project_name }}' "$name"
+assert_line rproject.toml "^name = \"$name\"$"
+
+replace_literal flake.nix '{{ project_name }}' "$name"
+assert_line flake.nix "description = \"$name\""
+
+replace_literal README.md '{{ project_name }}' "$name"
+replace_literal README.md '{{ description }}' "$description"
+assert_line README.md "^# $name"
+
+leftover=$(grep -n '{{' "${owned_paths[@]}" 2>/dev/null || true)
+if [ -n "$leftover" ]; then
+  die "placeholders remain after bootstrapping:
+$leftover
+  The template shipped one this script does not know about. Add it to
+  owned_paths and handle it here, or fill it by hand."
+fi
+
+note ""
+note "bootstrapped $name from $template_repo@$rev${tag:+ ($tag)}"
+note "next: git add -A && git commit -m 'chore: bootstrap from template'"
